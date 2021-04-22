@@ -1,6 +1,12 @@
 # Hivemind Websocket Client
 
-### Usage
+## Install
+
+```bash
+pip install hivemind_bus_client==0.0.1a1
+```
+
+## Usage
 
 ```python
 from hivemind_bus_client import HiveMessageBusClient, HiveMessage, HiveMessageType
