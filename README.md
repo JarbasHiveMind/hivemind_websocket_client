@@ -3,7 +3,7 @@
 ## Install
 
 ```bash
-pip install hivemind_bus_client==0.0.1a1
+pip install hivemind_bus_client==0.0.1a2
 ```
 
 ## Usage
