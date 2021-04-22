@@ -9,7 +9,6 @@ class HiveMessageListener:
 
     def _handler(self, message):
         """Receive response data."""
-        print(message)
         for handler in self._handlers:
             handler(message)
         self.bus.once(self.message_type, self._handler)
@@ -40,6 +39,15 @@ class HivePayloadListener(HiveMessageListener):
             for handler in self._handlers:
                 handler(message.payload)
         self.bus.once(self.message_type, self._handler)
+
+
+def on_hive_message(message_type, bus):
+    # Begin wrapper
+    def wrapped_handler(func):
+        bus.on(message_type, func)
+        return func
+
+    return wrapped_handler
 
 
 def on_mycroft_message(payload_type, bus):

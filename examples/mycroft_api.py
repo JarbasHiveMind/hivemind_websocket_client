@@ -3,7 +3,7 @@ from hivemind_bus_client import HiveMessageBusClient, HiveMessage, \
 from mycroft_bus_client import Message
 
 # these should never be equal! one travels down the wire and is an access token
-key = "my_access_key"
+key = "ivf1NQSkQNogWYyr"
 # the other is a pre-shared encryption key for a crude initial e2e encryption
 # NOTE: needs to be exactly 16chars
 crypto_key = "ivf1NQSkQNogWYyr"
