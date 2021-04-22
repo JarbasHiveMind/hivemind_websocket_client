@@ -211,6 +211,10 @@ class HiveMessageBusClient:
             LOG.warning('Could not send {} message because connection '
                         'has been closed'.format(message.msg_type))
 
+    def emit_mycroft(self, message):
+        message = HiveMessage(msg_type=HiveMessageType.BUS, payload=message)
+        self.emit(message)
+
     # event api
     def on(self, event_name, func):
         self.emitter.on(event_name, func)
