@@ -128,6 +128,58 @@ def on_escalate(payload_type, bus):
     return wrapped_handler
 
 
+def on_handshake(payload_type, bus):
+    # Begin wrapper
+    def wrapped_handler(func):
+        waiter = HivePayloadListener(bus=bus, payload_type=payload_type,
+                                     message_type=HiveMessageType.HANDSHAKE)
+        waiter.add_handler(func)
+        waiter.listen()
+        func.shutdown = waiter.shutdown
+        return func
+
+    return wrapped_handler
+
+
+def on_hello(payload_type, bus):
+    # Begin wrapper
+    def wrapped_handler(func):
+        waiter = HivePayloadListener(bus=bus, payload_type=payload_type,
+                                     message_type=HiveMessageType.HELLO)
+        waiter.add_handler(func)
+        waiter.listen()
+        func.shutdown = waiter.shutdown
+        return func
+
+    return wrapped_handler
+
+
+def on_cascade(payload_type, bus):
+    # Begin wrapper
+    def wrapped_handler(func):
+        waiter = HivePayloadListener(bus=bus, payload_type=payload_type,
+                                     message_type=HiveMessageType.CASCADE)
+        waiter.add_handler(func)
+        waiter.listen()
+        func.shutdown = waiter.shutdown
+        return func
+
+    return wrapped_handler
+
+
+def on_rendezvous(payload_type, bus):
+    # Begin wrapper
+    def wrapped_handler(func):
+        waiter = HivePayloadListener(bus=bus, payload_type=payload_type,
+                                     message_type=HiveMessageType.RENDEZVOUS)
+        waiter.add_handler(func)
+        waiter.listen()
+        func.shutdown = waiter.shutdown
+        return func
+
+    return wrapped_handler
+
+
 def on_registry_opcode(payload_type, bus):
     # Begin wrapper
     def wrapped_handler(func):

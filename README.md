@@ -12,9 +12,10 @@ pip install hivemind_bus_client==0.0.1a3
 from time import sleep
 from mycroft_bus_client import Message
 from hivemind_bus_client import HiveMessageBusClient
-from hivemind_bus_client.decorators import on_payload, on_escalate, \
+from hivemind_bus_client.decorators import on_escalate, \
     on_shared_bus, on_ping, on_broadcast, on_propagate, on_mycroft_message, \
-    on_registry_opcode
+    on_registry_opcode, on_third_party, on_cascade, on_handshake, on_hello, \
+    on_rendezvous, on_hive_message, on_third_party, on_payload
 
 key = "super_secret_access_key"
 crypto_key = "ivf1NQSkQNogWYyr"
