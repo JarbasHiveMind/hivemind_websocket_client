@@ -1,5 +1,7 @@
 # Hivemind Websocket Client
 
+![logo](./logo.png)
+
 ## Install
 
 ```bash
