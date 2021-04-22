@@ -20,7 +20,6 @@ class HiveMessageType(str, Enum):
                          # all nodes in the hive (responses optional)
     PING = "ping"  # like cascade, but used to map the network
     RENDEZVOUS = "rendezvous"  # reserved for rendezvous-nodes
-    REGISTRY = "registry"  # global opcode registry
     THIRDPRTY = "3rdparty"  # user land message, do whatever you want
 
 
