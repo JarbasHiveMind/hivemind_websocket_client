@@ -11,6 +11,7 @@ from websocket import WebSocketApp, WebSocketConnectionClosedException,  \
 from hivemind_bus_client.message import HiveMessage, HiveMessageType
 from hivemind_bus_client.util import serialize_message, \
     encrypt_as_json, decrypt_from_json
+from mycroft_bus_client import Message as MycroftMessage
 
 
 LOG = logging.getLogger("HiveMind-websocket-client")
@@ -189,6 +190,10 @@ class HiveMessageBusClient:
                 raise ValueError('You must execute run_forever() '
                                  'before emitting messages')
             self.connected_event.wait()
+
+        if isinstance(message, MycroftMessage):
+            message = HiveMessage(msg_type=HiveMessageType.BUS,
+                                  payload=message)
         try:
             # auto inject context for proper routing, this is confusing for
             # end users if they need to do it manually, error prone and easy
