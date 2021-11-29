@@ -83,6 +83,7 @@ class HiveMessageBusClient:
     def __init__(self, key, crypto_key=None, host='127.0.0.1', port=5678,
                  useragent="HiveMessageBusClientV0.0.1", ssl=True,
                  self_signed=False, debug=False):
+        host = host.replace("ws://", "").replace("wss://", "").strip()
         self.ssl = ssl
         self.key = key
         self.useragent = useragent
