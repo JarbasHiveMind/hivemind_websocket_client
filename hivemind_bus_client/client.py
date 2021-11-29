@@ -82,7 +82,8 @@ class HivePayloadWaiter(HiveMessageWaiter):
 class HiveMessageBusClient:
     def __init__(self, key, crypto_key=None, host='127.0.0.1', port=5678,
                  useragent="HiveMessageBusClientV0.0.1", ssl=True,
-                 self_signed=False):
+                 self_signed=False, debug=False):
+        host = host.replace("ws://", "").replace("wss://", "").strip()
         self.ssl = ssl
         self.key = key
         self.useragent = useragent
@@ -95,6 +96,8 @@ class HiveMessageBusClient:
         self.connected_event = Event()
         self.started_running = False
         self.allow_self_signed = self_signed
+        self._mycroft_events = {}  # msg_type: [handler]
+        self.debug = debug
 
     @staticmethod
     def build_url(key, host='127.0.0.1', port=5678,
@@ -178,11 +181,15 @@ class HiveMessageBusClient:
                 message = decrypt_from_json(self.crypto_key,  message)
             else:
                 LOG.warning("Message was unencrypted")
-        if isinstance( message, str):
+        if isinstance(message, str):
             message = json.loads(message)
+        if self.debug:
+            print("received: ", message)
         self.emitter.emit('message', message)
         parsed_message = HiveMessage(**message)
         self.emitter.emit(parsed_message.msg_type, parsed_message)
+        if parsed_message.msg_type == HiveMessageType.BUS:
+            self._fire_mycroft_handlers(parsed_message)
 
     def emit(self, message):
         if not self.connected_event.wait(10):
@@ -216,13 +223,40 @@ class HiveMessageBusClient:
             LOG.warning('Could not send {} message because connection '
                         'has been closed'.format(message.msg_type))
 
+    # mycroft events api
+    def _fire_mycroft_handlers(self, message):
+        handlers = []
+        if isinstance(message, MycroftMessage):
+            handlers = self._mycroft_events.get(message.msg_type) or []
+        elif message.msg_type == HiveMessageType.BUS:
+            handlers = self._mycroft_events.get(message.payload.msg_type) or []
+        for func in handlers:
+            try:
+                func(message.payload)
+            except Exception as e:
+                if self.debug:
+                    print(e)
+                continue
+
     def emit_mycroft(self, message):
         message = HiveMessage(msg_type=HiveMessageType.BUS, payload=message)
         self.emit(message)
 
+    def on_mycroft(self, mycroft_msg_type, func):
+        self._mycroft_events[mycroft_msg_type] = self._mycroft_events.get(mycroft_msg_type) or []
+        self._mycroft_events[mycroft_msg_type].append(func)
+
     # event api
     def on(self, event_name, func):
-        self.emitter.on(event_name, func)
+        if event_name not in list(HiveMessageType):
+            # assume it's a mycroft message
+            # this could be done better,
+            # but makes this lib almost a drop in replacement
+            # for the mycroft bus client
+            self.on_mycroft(event_name, func)
+        else:
+            # hivemind message
+            self.emitter.on(event_name, func)
 
     def once(self, event_name, func):
         self.emitter.once(event_name, func)
@@ -291,11 +325,15 @@ class HiveMessageBusClient:
         return HivePayloadWaiter(bus=self, payload_type=payload_type,
                                  message_type=message_type).wait(timeout)
 
+    def wait_for_mycroft(self, mycroft_msg_type, timeout=3.0):
+        return self.wait_for_payload(mycroft_msg_type, timeout=timeout,
+                                     message_type=HiveMessageType.BUS)
+
     def wait_for_response(self, message, reply_type=None, timeout=3.0):
         """Send a message and wait for a response.
 
         Arguments:
-            message (HiveMessage): message to send
+            message (HiveMessage): message to send, mycroft Message objects also accepted
             reply_type (HiveMessageType): the message type of the expected reply.
                                           Defaults to "<message.msg_type>".
             timeout: seconds to wait before timeout, defaults to 3
@@ -303,6 +341,8 @@ class HiveMessageBusClient:
         Returns:
             The received message or None if the response timed out
         """
+        if isinstance(message, MycroftMessage):
+            message = HiveMessage(msg_type=HiveMessageType.BUS, payload=message)
         message_type = reply_type or message.msg_type
         waiter = HiveMessageWaiter(self, message_type)  # Setup response handler
         # Send message and wait for it's response
@@ -314,7 +354,7 @@ class HiveMessageBusClient:
         """Send a message and wait for a response.
 
         Arguments:
-            message (HiveMessage): message to send
+            message (HiveMessage): message to send, mycroft Message objects also accepted
             payload_type (str): the message type of the expected payload
             reply_type (HiveMessageType): the message type of the expected reply.
                                           Defaults to "<message.msg_type>".
@@ -323,6 +363,8 @@ class HiveMessageBusClient:
         Returns:
             The received message or None if the response timed out
         """
+        if isinstance(message, MycroftMessage):
+            message = HiveMessage(msg_type=HiveMessageType.BUS, payload=message)
         message_type = reply_type or message.msg_type
         waiter = HivePayloadWaiter(bus=self, payload_type=payload_type,
                                    message_type=message_type)  # Setup
