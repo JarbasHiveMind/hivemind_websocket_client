@@ -139,17 +139,17 @@ class HiveMessageBusClient:
         self.connected_event.clear()
 
     # event handlers
-    def on_open(self):
+    def on_open(self, _):
         LOG.info("Connected")
         self.connected_event.set()
         self.emitter.emit("open")
         # Restore reconnect timer to 5 seconds on sucessful connect
         self.retry = 5
 
-    def on_close(self):
+    def on_close(self, _):
         self.emitter.emit("close")
 
-    def on_error(self, error):
+    def on_error(self, _, error):
         """ On error start trying to reconnect to the websocket. """
         if isinstance(error, WebSocketConnectionClosedException):
             LOG.warning('Could not send message because connection has closed')
@@ -175,7 +175,7 @@ class HiveMessageBusClient:
         except WebSocketException:
             pass
 
-    def on_message(self, message):
+    def on_message(self, _, message):
         if self.crypto_key:
             if "ciphertext" in message:
                 message = decrypt_from_json(self.crypto_key,  message)
