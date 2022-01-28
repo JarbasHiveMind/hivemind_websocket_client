@@ -21,11 +21,13 @@ class HiveMessageType(str, Enum):
     PING = "ping"  # like cascade, but used to map the network
     RENDEZVOUS = "rendezvous"  # reserved for rendezvous-nodes
     THIRDPRTY = "3rdparty"  # user land message, do whatever you want
+    BINARY = "bin"  # binary data container, payload for something else
+    ACTION = "registry"  # reserved as prefix for action registry
 
 
 class HiveMessage:
     def __init__(self, msg_type, payload=None, node=None, source_peer=None,
-                 route=None, target_peers=None):
+                 route=None, target_peers=None, meta=None):
         #  except for the hivemind node classes receiving the message and
         #  creating the object nothing should be able to change these values
         #  node classes might change them a runtime by the private attribute
@@ -53,6 +55,7 @@ class HiveMessage:
         self._source_peer = source_peer  # peer_id
         self._route = route or []  # where did this message come from
         self._targets = target_peers or []  # where will it be sent
+        self._meta = meta or {}
 
     @property
     def msg_type(self):
@@ -110,6 +113,27 @@ class HiveMessage:
 
     def serialize(self):
         return self.as_json
+
+    @staticmethod
+    def deserialize(payload):
+        if isinstance(payload, str):
+            payload = json.loads(payload)
+
+        if "msg_type" in payload:
+            try:
+                return HiveMessage(payload["msg_type"], payload["payload"])
+            except:
+                pass  # not a hivemind message
+
+        if "type" in payload:
+            try:
+                # NOTE: technically could also be SHARED_BUS or THIRDPRTY
+                return HiveMessage(HiveMessageType.BUS,
+                                   Message.deserialize(payload))
+            except:
+                pass  # not a mycroft message
+
+        return HiveMessage(HiveMessageType.THIRDPRTY, payload)
 
     def __getitem__(self, item):
         return self._payload.get(item)

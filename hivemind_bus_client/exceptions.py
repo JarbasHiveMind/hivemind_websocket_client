@@ -1,4 +1,7 @@
 
+class UnsupportedProtocolVersion(ValueError):
+    """ Specified protocol version is not supported """
+
 
 class HiveMindException(Exception):
     """ An Exception inside the HiveMind"""

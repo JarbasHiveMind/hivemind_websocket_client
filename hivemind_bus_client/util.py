@@ -1,8 +1,12 @@
 import json
+import zlib
+from binascii import hexlify
+from binascii import unhexlify
+
 from ovos_utils.security import encrypt, decrypt
-from binascii import hexlify, unhexlify
-from hivemind_bus_client.message import HiveMessage, HiveMessageType, Message
+
 from hivemind_bus_client.exceptions import EncryptionKeyError, DecryptionKeyError
+from hivemind_bus_client.message import HiveMessage, HiveMessageType, Message
 
 
 def serialize_message(message):
@@ -126,3 +130,38 @@ def decrypt_from_json(key, data):
         return decrypt(key, ciphertext, tag, nonce)
     except ValueError:
         raise DecryptionKeyError
+
+
+def compress_payload(text):
+    # Compressing text
+    if isinstance(text, str):
+        decompressed = text.encode("utf-8")
+    else:
+        decompressed = text
+    return zlib.compress(decompressed)
+
+
+def decompress_payload(compressed):
+    # Decompressing text
+    if isinstance(compressed, str):
+        # assume hex
+        compressed = unhexlify(compressed)
+    return zlib.decompress(compressed)
+
+
+def cast2bytes(payload, compressed=False):
+    if isinstance(payload, dict):
+        payload = json.dumps(payload)
+    if compressed:
+        payload = compress_payload(payload)
+    if isinstance(payload, str):
+        payload = payload.encode("utf-8")
+    assert isinstance(payload, bytes)
+    return payload
+
+
+def bytes2str(payload, compressed=False):
+    if compressed:
+        return decompress_payload(payload).decode("utf-8")
+    else:
+        return payload.decode("utf-8")
