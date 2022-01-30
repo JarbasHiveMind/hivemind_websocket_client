@@ -21,13 +21,13 @@ class HiveMessageType(str, Enum):
     PING = "ping"  # like cascade, but used to map the network
     RENDEZVOUS = "rendezvous"  # reserved for rendezvous-nodes
     THIRDPRTY = "3rdparty"  # user land message, do whatever you want
-    REGISTRY = "registry"  # reserved as prefix for action registry
     BINARY = "bin"  # binary data container, payload for something else
+    REGISTRY = "registry"  # reserved as prefix for action registry
 
 
 class HiveMessage:
     def __init__(self, msg_type, payload=None, node=None, source_peer=None,
-                 route=None, target_peers=None):
+                 route=None, target_peers=None, meta=None):
         #  except for the hivemind node classes receiving the message and
         #  creating the object nothing should be able to change these values
         #  node classes might change them a runtime by the private attribute
@@ -55,6 +55,7 @@ class HiveMessage:
         self._source_peer = source_peer  # peer_id
         self._route = route or []  # where did this message come from
         self._targets = target_peers or []  # where will it be sent
+        self._meta = meta or {}
 
     @property
     def msg_type(self):
