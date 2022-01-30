@@ -10,7 +10,9 @@ from hivemind_bus_client.message import HiveMessageType, HiveMessage
 
 
 class HiveMindBinaryPayloadType(IntEnum):
-    UNKNOWN = 0  # no info provided about binary contents
+    """ Pseudo extension type for binary payloads
+    it doesnt describe the payload but rather provides instruction to hivemind about how to handle it"""
+    UNDEFINED = 0  # no info provided about binary contents
     RAW_AUDIO = 1  # binary content is raw audio  (TODO spec exactly what "raw audio" means)
     NUMPY_ARRAY = 2  # binary content is a numpy array, eg, webcam image
     FILE = 3  # binary is a file to be saved, additional metadata provided elsewhere
@@ -84,7 +86,7 @@ def _frombytes(payload, compressed=False):
 
 def get_bitstring(hive_type=HiveMessageType.BUS, payload=None,
                   compressed=False, hivemeta=None,
-                  binary_type=HiveMindBinaryPayloadType.UNKNOWN):
+                  binary_type=HiveMindBinaryPayloadType.UNDEFINED):
     # there are 13 hivemind message main types
     typemap = {v: k for k, v in _INT2TYPE.items()}
     binmap = {e: e.value for e in HiveMindBinaryPayloadType}
@@ -123,9 +125,11 @@ def decode_bitstring(bitstr):
     metalen = s.read(8).int
     meta = s.read(metalen * 8).bytes
     meta = _frombytes(meta, compressed)
+    # TODO standardize hivemind meta
+    kwargs = {a: meta[a] for a in signature(HiveMessage).parameters if a in meta}
 
     is_bin = hive_type == HiveMessageType.BINARY
-    bin_type = HiveMindBinaryPayloadType.UNKNOWN
+    bin_type = HiveMindBinaryPayloadType.UNDEFINED
     if is_bin:
         bin_type = binmap.get(s.read(4).int, 0)
 
@@ -142,8 +146,6 @@ def decode_bitstring(bitstr):
             meta["msg_type"] = hive_type
             hive_type = HiveMessageType.BINARY
 
-    # TODO standardize hivemind meta
-    kwargs = {a: meta[a] for a in signature(HiveMessage).parameters if a in meta}
     return HiveMessage(hive_type, payload, meta=meta, **kwargs)
 
 
