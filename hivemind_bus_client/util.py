@@ -1,12 +1,22 @@
 import json
-import sys
 from binascii import hexlify, unhexlify
+import zlib
+from binascii import unhexlify
 from ovos_utils.security import encrypt, decrypt
 
-# backward
-from hivemind_bus_client.serialization import serialize_message
 
-
+def serialize_message(message):
+    # convert a Message object into raw data that can be sent over
+    # websocket
+    if hasattr(message, 'serialize'):
+        return message.serialize()
+    elif isinstance(message, dict):
+        message = {
+            k: v if not hasattr(v, 'serialize') else serialize_message(v)
+            for k, v in message.items()}
+        return json.dumps(message)
+    else:
+        return json.dumps(message.__dict__)
 
 
 def encrypt_as_json(key, data, nonce=None):
@@ -40,3 +50,37 @@ def decrypt_from_json(key, data):
         raise RuntimeError("DecryptionKeyError")
 
 
+
+def compress_payload(text):
+    # Compressing text
+    if isinstance(text, str):
+        decompressed = text.encode("utf-8")
+    else:
+        decompressed = text
+    return zlib.compress(decompressed)
+
+
+def decompress_payload(compressed):
+    # Decompressing text
+    if isinstance(compressed, str):
+        # assume hex
+        compressed = unhexlify(compressed)
+    return zlib.decompress(compressed)
+
+
+def cast2bytes(payload, compressed=False):
+    if isinstance(payload, dict):
+        payload = json.dumps(payload)
+    if compressed:
+        payload = compress_payload(payload)
+    if isinstance(payload, str):
+        payload = payload.encode("utf-8")
+    assert isinstance(payload, bytes)
+    return payload
+
+
+def bytes2str(payload, compressed=False):
+    if compressed:
+        return decompress_payload(payload).decode("utf-8")
+    else:
+        return payload.decode("utf-8")
