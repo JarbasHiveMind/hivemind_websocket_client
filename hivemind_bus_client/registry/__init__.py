@@ -2,18 +2,17 @@ from bitstring import BitArray, BitStream
 from hivemind_bus_client.util import cast2bytes
 from hivemind_bus_client.message import HiveMessageType
 MOCK_REGISTRY = {
-    "execute_tts": {"uid": 0, "data": {
-        "utterance": {"description": "Playback text to speech in target",
-                      "type": "str16"},
-        "expect_response": {"default": False,
+    "execute_tts": {"uid": 0, "data": [
+        ("utterance", {"description": "Playback text to speech in target",
+                      "type": "str16"}),
+        ("expect_response", {"default": False,
                             "type": "bool",
-                            "description": "Boolean indicating if a user response is expected"},
-        "lang": {
-            "default": "auto",  # its up to the handler to detect from text
+                            "description": "Boolean indicating if a user response is expected"}),
+         ("lang", {  "default": "auto",  # its up to the handler to detect from text
             "type": "str",
             "description": "Lowercased BCP 47 Language tag associated with `utterance` (i.e. en-us)"
-        },
-    }}
+        }),
+    ]}
 }
 
 # TODO The registry should be distributed outside of this repo
@@ -29,7 +28,7 @@ def encode_action(action, payload, compressed=False):
 
     s.append(f'uint:6={REGISTRY[action]["uid"]}')  # 6 bit unsigned integer - action id
 
-    for key, meta in REGISTRY[action]["data"].items():
+    for key, meta in REGISTRY[action]["data"]:
         v = payload.get(key) or meta.get("default")
         if v is None:
             # TODO handle required values
@@ -55,7 +54,7 @@ def decode_action(bitstr):
 
     decoded = {"action": action, "uid": uid, "data": {}}
 
-    for key, meta in REGISTRY[action]["data"].items():
+    for key, meta in REGISTRY[action]["data"]:
         v = meta.get("default")
         if meta["type"] == "bool":
             v = bool(s.read(1))
