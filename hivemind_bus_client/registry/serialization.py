@@ -41,21 +41,23 @@ _INT2TYPE = {0: HiveMessageType.HANDSHAKE,
 def get_bitstring(hive_type=HiveMessageType.BUS, payload=None,
                   compressed=False, hivemeta=None,
                   binary_type=HiveMindBinaryPayloadType.UNDEFINED,
-                  proto_version=PROTOCOL_VERSION):
+                  proto_version=PROTOCOL_VERSION, versioned=False):
     if proto_version <= 1:
-        return _get_bitstring_v1(hive_type, payload, compressed, hivemeta, binary_type)
+        return _get_bitstring_v1(hive_type, payload, compressed, hivemeta, binary_type, versioned)
     raise UnsupportedProtocolVersion(f"Max Supported Version: {PROTOCOL_VERSION}")
 
 
 def _get_bitstring_v1(hive_type=HiveMessageType.BUS, payload=None,
                       compressed=False, hivemeta=None,
-                      binary_type=HiveMindBinaryPayloadType.UNDEFINED):
+                      binary_type=HiveMindBinaryPayloadType.UNDEFINED, versioned=False):
     # there are 13 hivemind message main types
     typemap = {v: k for k, v in _INT2TYPE.items()}
     binmap = {e: e.value for e in HiveMindBinaryPayloadType}
 
     s = BitArray()
-    s.append(f'uint:8={PROTOCOL_VERSION}')  # 8 bit unsigned integer - versioning
+    s.append(f'uint:1={int(versioned)}')  # 1 bit unsigned integer - requires protocol version
+    if versioned:
+        s.append(f'uint:8={PROTOCOL_VERSION}')
     s.append(f'uint:5={typemap.get(hive_type, 11)}')  # 5 bit unsigned integer - the hive msg type
     s.append(f'uint:1={int(bool(compressed))}')  # 1 bit unsigned integer - payload is zlib compressed
 
@@ -80,9 +82,13 @@ def _get_bitstring_v1(hive_type=HiveMessageType.BUS, payload=None,
 
 def decode_bitstring(bitstr):
     s = BitStream(bitstr)
-    proto_version = s.read(8).uint
+    versioned = s.read(1).bool
+    if versioned:
+        proto_version = s.read(8).uint
+    else:
+        proto_version = PROTOCOL_VERSION
     if proto_version <= 1:
-        return _decode_bitstring_v1(bitstr)
+        return _decode_bitstring_v1(s)
     raise UnsupportedProtocolVersion(f"Max Supported Version: {PROTOCOL_VERSION}")
 
 
