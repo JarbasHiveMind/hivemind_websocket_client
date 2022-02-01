@@ -89,7 +89,7 @@ if __name__ == "__main__":
     #  'uid': 0}
 
     from hivemind_bus_client.registry.serialization import get_bitstring, decode_bitstring
-    bitstr = get_bitstring(hive_type=HiveMessageType.REGISTRY,
+    bitstr = get_bitstring(hive_type=HiveMessageType.ACTION,
                            payload=encoded)
 
     decoded = decode_bitstring(bitstr)

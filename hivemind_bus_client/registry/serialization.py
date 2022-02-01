@@ -3,10 +3,14 @@ from enum import IntEnum
 from inspect import signature
 
 from bitstring import BitArray, BitStream
-
+from hivemind_bus_client.exceptions import UnsupportedProtocolVersion
 from hivemind_bus_client.message import HiveMessageType, HiveMessage
 from hivemind_bus_client.registry import decode_action, encode_action
 from hivemind_bus_client.util import compress_payload, decompress_payload, cast2bytes, bytes2str
+
+
+PROTOCOL_VERSION = 0  # integer, a version increase signals new functionality added
+                      # version 0 is alpha, nothing is stable until we reach version 1
 
 
 class HiveMindBinaryPayloadType(IntEnum):
@@ -14,7 +18,7 @@ class HiveMindBinaryPayloadType(IntEnum):
     it doesnt describe the payload but rather provides instruction to hivemind about how to handle it"""
     UNDEFINED = 0  # no info provided about binary contents
     RAW_AUDIO = 1  # binary content is raw audio  (TODO spec exactly what "raw audio" means)
-    NUMPY_ARRAY = 2  # binary content is a numpy array, eg, webcam image
+    NUMPY_IMAGE = 2  # binary content is an image as a numpy array, eg. webcam picture
     FILE = 3  # binary is a file to be saved, additional metadata provided elsewhere
 
 
@@ -31,17 +35,27 @@ _INT2TYPE = {0: HiveMessageType.HANDSHAKE,
              10: HiveMessageType.RENDEZVOUS,
              11: HiveMessageType.THIRDPRTY,
              12: HiveMessageType.BINARY,
-             13: HiveMessageType.REGISTRY}
+             13: HiveMessageType.ACTION}
 
 
 def get_bitstring(hive_type=HiveMessageType.BUS, payload=None,
                   compressed=False, hivemeta=None,
-                  binary_type=HiveMindBinaryPayloadType.UNDEFINED):
+                  binary_type=HiveMindBinaryPayloadType.UNDEFINED,
+                  proto_version=PROTOCOL_VERSION):
+    if proto_version <= 1:
+        return _get_bitstring_v1(hive_type, payload, compressed, hivemeta, binary_type)
+    raise UnsupportedProtocolVersion(f"Max Supported Version: {PROTOCOL_VERSION}")
+
+
+def _get_bitstring_v1(hive_type=HiveMessageType.BUS, payload=None,
+                      compressed=False, hivemeta=None,
+                      binary_type=HiveMindBinaryPayloadType.UNDEFINED):
     # there are 13 hivemind message main types
     typemap = {v: k for k, v in _INT2TYPE.items()}
     binmap = {e: e.value for e in HiveMindBinaryPayloadType}
 
     s = BitArray()
+    s.append(f'uint:8={PROTOCOL_VERSION}')  # 8 bit unsigned integer - versioning
     s.append(f'uint:5={typemap.get(hive_type, 11)}')  # 5 bit unsigned integer - the hive msg type
     s.append(f'uint:1={int(bool(compressed))}')  # 1 bit unsigned integer - payload is zlib compressed
 
@@ -51,7 +65,7 @@ def get_bitstring(hive_type=HiveMessageType.BUS, payload=None,
     s.append(hivemeta)  # arbitrary hivemind meta
 
     # the remaining bits are the payload
-    if hive_type != HiveMessageType.REGISTRY:
+    if hive_type != HiveMessageType.ACTION:
         if hasattr(payload, "serialize"):
             payload = payload.serialize()
         payload = cast2bytes(payload, compressed)
@@ -65,32 +79,37 @@ def get_bitstring(hive_type=HiveMessageType.BUS, payload=None,
 
 
 def decode_bitstring(bitstr):
+    s = BitStream(bitstr)
+    proto_version = s.read(8).uint
+    if proto_version <= 1:
+        return _decode_bitstring_v1(bitstr)
+    raise UnsupportedProtocolVersion(f"Max Supported Version: {PROTOCOL_VERSION}")
+
+
+def _decode_bitstring_v1(s):
     binmap = {e: e.value for e in HiveMindBinaryPayloadType}
 
-    s = BitStream(bitstr)
-
-    hive_type = _INT2TYPE.get(s.read(5).int, 11)
+    hive_type = _INT2TYPE.get(s.read(5).uint, 11)
     compressed = bool(s.read(1))
 
-    metalen = s.read(8).int
-    meta = s.read(metalen * 8).bytes
-    meta = bytes2str(meta, compressed)
+    metalen = s.read(8).uint * 8
+    meta = s.read(metalen)
+
     # TODO standardize hivemind meta
+    meta = bytes2str(meta.bytes, compressed)
     kwargs = {a: meta[a] for a in signature(HiveMessage).parameters if a in meta}
 
     is_bin = hive_type == HiveMessageType.BINARY
     bin_type = HiveMindBinaryPayloadType.UNDEFINED
     if is_bin:
-        bin_type = binmap.get(s.read(4).int, 0)
+        bin_type = binmap.get(s.read(4).uint, 0)
 
-    payload_len = len(s) - 14 - metalen * 8
-    print(meta)
+    payload_len = len(s) - s.pos
     payload = s.read(payload_len)
 
-    if hive_type == HiveMessageType.REGISTRY:
+    if hive_type == HiveMessageType.ACTION:
         payload = decode_action(payload)
     elif not is_bin:
-
         payload = bytes2str(payload.bytes, compressed)
     else:
         payload = payload.bytes
@@ -115,19 +134,21 @@ Mycroft announced that a third hardware project, Mark III, will be offered throu
 
     payload = Message("speak", {"utterance": text})
 
-    print(len(payload.serialize().encode("utf-8")))
-    bitstr = get_bitstring(hive_type=HiveMessageType.BUS,
-                           payload=payload,
-                           compressed=True)
-    print(bitstr)
+    json_plod = HiveMessage(HiveMessageType.BUS, payload)
+    n_json_bits = len(json_plod.serialize().encode("utf-8")) * 8
+    # 10096 - naive json2bytes
 
-    print(len(bitstr) / 8)  # 5045
-    exit()
+    bitstr = get_bitstring(hive_type=HiveMessageType.BUS,
+                           payload=payload,
+                           compressed=False)
+    n_unc_bits = len(bitstr)
+    # 9494  - uncompressed HM
+
     bitstr = get_bitstring(hive_type=HiveMessageType.BUS,
                            payload=payload,
                            compressed=True)
-    print(len(bitstr))  # 2917
-    decode_bitstring(bitstr)
+    n_enc_bits = len(bitstr)
+    # 4886 - compressed HM  (small strings might actually become larger)
 
     decoded = decode_bitstring(bitstr)
     print(decoded)
@@ -137,38 +158,37 @@ Mycroft announced that a third hardware project, Mark III, will be offered throu
     bitstr = get_bitstring(hive_type=HiveMessageType.BROADCAST,
                            payload=payload,
                            compressed=False)
-    print(len(bitstr))  # 1205
+
     decoded = decode_bitstring(bitstr)
     print(decoded)
 
     compressed = compress_payload(text).hex()
-
-
     # 789c5590c16e84300c44ef7cc51c5ba942bdee1fb4528ffb03261848156c9418e8fe7d9daebab0b72863cfbcf1758a05c32ac1a20afc6d1363c971a67c4314e33c506098bae0eaacfd9a18945446ecd126343d079d97cca5bcbc3e9c5a5c9f8c33db9aa5a0bb1943bb6f0ee66ffc6f4677abc13d19a119e3c65223a3810a16ca34b39354533e3c27d748d4f7f231834029718fc41b27ec530c8e18542c6bba97e31f6331e870a457de4fcf92bfc6a3bb746c3b3bc47bc5b8b4f8d29d8b61a3b4b27f36c5487aefa719a2672337e971c149efeae253d4471c2b7385b9633a4b739a78c39899ec3122a3dff9c4ebf54e776c7f0106a5a377
 
     def measure_compression(text):
+        text = text.encode("utf-8")
         text_size = sys.getsizeof(text)
-        print("\nsize of original text", text_size)
+        print("N bytes of original text", text_size)
 
         compressed = compress_payload(text)
         csize = sys.getsizeof(compressed)
-        print("\nsize of compressed text", csize)
+        print("N bytes of compressed text", csize)
 
         decompressed = decompress_payload(compressed)
         dsize = sys.getsizeof(decompressed)
-        print("\nsize of decompressed text", dsize)
+        print("N bytes of decompressed text", dsize)
 
         sdiff = text_size - csize
-        print("\nDifference of size= ", sdiff)
+        print("Difference of N bytes", sdiff)
 
-        print("\nSize reduced by", sdiff * 100 / text_size, "%")
+        print("N bytes reduced by", sdiff * 100 / text_size, "%")
 
         return sdiff * 100 / text_size
 
 
     measure_compression(text)
-    # size of original text 484
-    # size of compressed text 280
-    # size of decompressed text 484
-    # Difference of size=  204
-    # Size reduced by 42.14876033057851 %
+    # N bytes of original text 1153
+    # N bytes of compressed text 588
+    # N bytes of decompressed text 1153
+    # Difference of N bytes 565
+    # N bytes reduced by 49.00260190806591 %

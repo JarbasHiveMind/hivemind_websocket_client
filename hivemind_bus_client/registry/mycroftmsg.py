@@ -12,7 +12,7 @@ def mycroft2bitstring(msg, compressed=False):
     if msg.msg_type == "speak":
         action = encode_action("execute_tts", msg.data,
                                compressed=compressed)
-        return get_bitstring(HiveMessageType.REGISTRY, action,
+        return get_bitstring(HiveMessageType.ACTION, action,
                              compressed=compressed, hivemeta=msg.context)
 
     else:  # default encoding

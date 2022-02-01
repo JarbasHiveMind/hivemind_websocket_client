@@ -22,7 +22,7 @@ class HiveMessageType(str, Enum):
     RENDEZVOUS = "rendezvous"  # reserved for rendezvous-nodes
     THIRDPRTY = "3rdparty"  # user land message, do whatever you want
     BINARY = "bin"  # binary data container, payload for something else
-    REGISTRY = "registry"  # reserved as prefix for action registry
+    ACTION = "registry"  # reserved as prefix for action registry
 
 
 class HiveMessage:
