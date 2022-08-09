@@ -1,6 +1,8 @@
 import json
 from ovos_utils.security import encrypt, decrypt
 from binascii import hexlify, unhexlify
+from hivemind_bus_client.message import HiveMessage, HiveMessageType, Message
+from hivemind_bus_client.exceptions import EncryptionKeyError, DecryptionKeyError
 
 
 def serialize_message(message):
@@ -17,6 +19,84 @@ def serialize_message(message):
         return json.dumps(message.__dict__)
 
 
+def payload2dict(payload):
+    """helper to ensure all subobjects of a payload are a dict safe for serialization
+    eg. ensure payload is valid to send over mycroft messagebus object """
+    if isinstance(payload, HiveMessage):
+        payload = payload.as_dict
+    if isinstance(payload, Message):
+        payload = payload.serialize()
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except:
+            pass
+    assert isinstance(payload, dict)
+
+    def can_serialize(val):
+        if isinstance(val, HiveMessage) \
+                or isinstance(val, Message) \
+                or isinstance(val, dict):
+            return True
+        return False
+
+    for k, v in payload.items():
+        if can_serialize(v):
+            payload[k] = payload2dict(v)
+        if isinstance(v, list):
+            for idx, l in enumerate(v):
+                if can_serialize(l):
+                    payload[k][idx] = payload2dict(l)
+    return payload
+
+
+def get_payload(msg):
+    """ helper to read normalized payload
+    from all supported formats (HiveMessage, Message, json str)
+    """
+    if isinstance(msg, HiveMessage):
+        msg = msg.payload
+    if isinstance(msg, Message):
+        msg = msg.serialize()
+    if isinstance(msg, str):
+        msg = json.loads(msg)
+    return msg
+
+
+def get_hivemsg(msg):
+    """ helper to create a normalized HiveMessage object
+    from all supported formats (Message, json str, dict)
+    """
+    if isinstance(msg, str):
+        msg = json.loads(msg)
+    if isinstance(msg, dict):
+        msg = HiveMessage(**msg)
+    if isinstance(msg, Message):
+        msg = HiveMessage(msg_type=HiveMessageType.BUS, payload=msg)
+    assert isinstance(msg, HiveMessage)
+    return msg
+
+
+def get_mycroft_msg(pload):
+    if isinstance(pload, HiveMessage):
+        assert pload.msg_type == HiveMessageType.BUS
+        pload = pload.payload
+
+    if isinstance(pload, str):
+        try:
+            pload = Message.deserialize(pload)
+        except:
+            pload = json.loads(pload)
+    if isinstance(pload, dict):
+        msg_type = pload.get("msg_type") or pload["type"]
+        data = pload.get("data") or {}
+        context = pload.get("context") or {}
+        pload = Message(msg_type, data, context)
+
+    assert isinstance(pload, Message)
+    return pload
+
+
 def encrypt_as_json(key, data, nonce=None):
     if isinstance(data, dict):
         data = json.dumps(data)
@@ -25,7 +105,7 @@ def encrypt_as_json(key, data, nonce=None):
     try:
         ciphertext, tag, nonce = encrypt(key, data, nonce=nonce)
     except:
-        raise RuntimeError("EncryptionKeyError")
+        raise EncryptionKeyError
     return json.dumps({"ciphertext": hexlify(ciphertext).decode('utf-8'),
                        "tag": hexlify(tag).decode('utf-8'),
                        "nonce": hexlify(nonce).decode('utf-8')})
@@ -45,4 +125,4 @@ def decrypt_from_json(key, data):
     try:
         return decrypt(key, ciphertext, tag, nonce)
     except ValueError:
-        raise RuntimeError("DecryptionKeyError")
+        raise DecryptionKeyError

@@ -1,18 +1,19 @@
 import base64
+import json
+import logging
+import ssl
 import time
 import traceback
 from threading import Event, Thread
-import ssl
-import json
-import logging
+
+from mycroft_bus_client import Message as MycroftMessage
 from pyee import ExecutorEventEmitter
-from websocket import WebSocketApp, WebSocketConnectionClosedException,  \
+from websocket import WebSocketApp, WebSocketConnectionClosedException, \
     WebSocketException
+
 from hivemind_bus_client.message import HiveMessage, HiveMessageType
 from hivemind_bus_client.util import serialize_message, \
     encrypt_as_json, decrypt_from_json
-from mycroft_bus_client import Message as MycroftMessage
-
 
 LOG = logging.getLogger("HiveMind-websocket-client")
 
@@ -103,7 +104,7 @@ class HiveMessageBusClient:
     def build_url(key, host='127.0.0.1', port=5678,
                   useragent="HiveMessageBusClientV0.0.1", ssl=True):
         scheme = 'wss' if ssl else 'ws'
-        key = base64.b64encode(f"{useragent}:{key}".encode("utf-8"))\
+        key = base64.b64encode(f"{useragent}:{key}".encode("utf-8")) \
             .decode("utf-8")
         return f'{scheme}://{host}:{port}?authorization={key}'
 
@@ -178,7 +179,7 @@ class HiveMessageBusClient:
     def on_message(self, _, message):
         if self.crypto_key:
             if "ciphertext" in message:
-                message = decrypt_from_json(self.crypto_key,  message)
+                message = decrypt_from_json(self.crypto_key, message)
             else:
                 LOG.warning("Message was unencrypted")
         if isinstance(message, str):
@@ -186,10 +187,12 @@ class HiveMessageBusClient:
         if self.debug:
             print("received: ", message)
         self.emitter.emit('message', message)
-        parsed_message = HiveMessage(**message)
-        self.emitter.emit(parsed_message.msg_type, parsed_message)
-        if parsed_message.msg_type == HiveMessageType.BUS:
-            self._fire_mycroft_handlers(parsed_message)
+        self._handle_hive_protocol(HiveMessage(**message))
+
+    def _handle_hive_protocol(self, message):
+        if message.msg_type == HiveMessageType.BUS:
+            self._fire_mycroft_handlers(message)
+        self.emitter.emit(message.msg_type, message)
 
     def emit(self, message):
         if not self.connected_event.wait(10):
@@ -206,22 +209,22 @@ class HiveMessageBusClient:
             # end users if they need to do it manually, error prone and easy
             # to forget
             if message.msg_type == HiveMessageType.BUS:
-                ctxt = message.payload.context
-                if "source" not in ctxt :
+                ctxt = dict(message.payload.context)
+                if "source" not in ctxt:
                     ctxt["source"] = self.useragent
                 if "platform" not in message.payload.context:
                     ctxt["platform"] = self.useragent
                 if "destination" not in message.payload.context:
-                    ctxt["destination"] = "JarbasHiveMind"
-                message._payload["context"] = ctxt
+                    ctxt["destination"] = self.peer
+                message.payload.context = ctxt
             payload = serialize_message(message)
             if self.crypto_key:
                 payload = encrypt_as_json(self.crypto_key, payload)
 
             self.client.send(payload)
         except WebSocketConnectionClosedException:
-            LOG.warning('Could not send {} message because connection '
-                        'has been closed'.format(message.msg_type))
+            LOG.warning(f'Could not send {message.msg_type} message because connection '
+                        'has been closed')
 
     # mycroft events api
     def _fire_mycroft_handlers(self, message):
@@ -372,3 +375,127 @@ class HiveMessageBusClient:
         # Send message and wait for it's response
         self.emit(message)
         return waiter.wait(timeout)
+
+
+class HiveNodeClient(HiveMessageBusClient):
+    """
+    Same as HiveMessageBusClient, but parses hivemind protocol messages.
+        ie, it will execute PROPAGATE, ESCALATE, BROADCAST etc.
+
+    Some message types can only be handled by hivemind server (eg. BROADCAST)
+    a mycroft websocket connection is needed to forward requests over it,
+    if a hivemind server is connected to the same bus they will be handled
+
+    """
+
+    def __init__(self, key, bus=None, crypto_key=None, host='127.0.0.1', port=5678,
+                 useragent="HiveNodeClientV0.0.1", share_bus=False, *args, **kwargs):
+        super().__init__(key, crypto_key=crypto_key, host=host, port=port,
+                         useragent=useragent, *args, **kwargs)
+        self.bus = None
+        self.peer = None
+        self.node_id = None
+        self.share_bus = share_bus
+        if bus:
+            self.bind(bus)
+
+    def bind(self, bus):
+        self.bus = bus
+        self.bus.on('hive.send.upstream', self.handle_mycroft_send)
+        self.bus.on("message", self.handle_outgoing_mycroft)
+
+    def _handle_hive_protocol(self, message):
+        if self.bus:
+            self.bus.emit(MycroftMessage("hive.message.received"))
+
+        if message.msg_type == HiveMessageType.HELLO:
+            self.handle_hello(message)
+        if message.msg_type == HiveMessageType.BROADCAST:
+            self.handle_broadcast(message)
+        if message.msg_type == HiveMessageType.PROPAGATE:
+            self.handle_propagate(message)
+        if message.msg_type == HiveMessageType.ESCALATE:
+            self.handle_illegal_msg(message)
+        if message.msg_type == HiveMessageType.BUS:
+            self.handle_bus(message)
+        super()._handle_hive_protocol(message)
+
+    # hivemind events
+    def handle_illegal_msg(self, message):
+        # this should not happen,
+        # ESCALATE is only sent from client -> server NOT server -> client
+        # TODO log, kill connection (?)
+        pass
+
+    def handle_hello(self, message):
+        if self.peer:
+            # only want this on the first connection
+            return
+        node_id = message.payload["node_id"].replace("127.0.0.1", "0.0.0.0")
+        expected_id = f"tcp4:{self.host}:{self.port}:".replace("127.0.0.1", "0.0.0.0")
+        # HACK: this check is because other nodes in the hive
+        # may also send HELLO with their pubkey
+        if node_id.startswith(expected_id):
+            self.peer = message.payload["peer"]
+            self.node_id = node_id
+            LOG.info(f"Connected to HiveMind: {node_id}")
+
+    def handle_bus(self, message):
+        assert isinstance(message.payload, MycroftMessage)
+        # inject message into mycroft bus
+        if not self.bus:
+            LOG.warning("Can not inject mycroft message, not connected to mycroft bus")
+            return
+        self.bus.emit(message.payload)
+
+    def handle_broadcast(self, message):
+        # tell any connected hivemind server to send this to all clients
+        if not self.bus:
+            LOG.warning("Can not broadcast hive message, not connected to mycroft bus")
+            return
+        data = json.loads(serialize_message(message))
+        self.bus.emit(MycroftMessage('hive.send.downstream', data))
+
+    def handle_propagate(self, message):
+        # tell any connected hivemind server to send this to all clients
+        if not self.bus:
+            LOG.warning("Can not propagate hive message, not connected to mycroft bus")
+            return
+        data = json.loads(serialize_message(message))
+        ctxt = {"node_id": self.node_id, "peer": self.peer}
+        self.bus.emit(MycroftMessage('hive.send.downstream', data, ctxt))
+
+    # mycroft bus events
+    def handle_outgoing_mycroft(self, message):
+        peer = message.context.get("destination")
+        message.context["source"] = message.context["node_id"] = self.node_id
+
+        # this allows the master node to do passive monitoring of bus events
+        if self.share_bus:
+            msg = HiveMessage(HiveMessageType.SHARED_BUS,
+                              source_peer=self.peer,
+                              payload=message.serialize())
+            self.emit(msg)
+
+        # message is explicitly targeted to master
+        if peer and peer == self.peer:
+            msg = HiveMessage(HiveMessageType.BUS,
+                              source_peer=self.peer,
+                              payload=message.serialize())
+            self.emit(msg)
+
+    def handle_mycroft_send(self, message):
+        # something connected to mycroft bus wants to send a hive message
+        msg_type = message.data.get("msg_type")
+        msg = HiveMessage(msg_type, message.data["payload"])
+
+        if msg_type == HiveMessageType.BUS:
+            self.emit(msg)
+        if msg_type == HiveMessageType.SHARED_BUS:
+            self.emit(msg)
+        if msg_type == HiveMessageType.ESCALATE:
+            self.emit(msg)
+        if msg_type == HiveMessageType.PROPAGATE:
+            self.emit(msg)
+
+        self.bus.emit(message.reply("hive.message.sent"))
