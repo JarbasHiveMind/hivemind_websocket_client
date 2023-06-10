@@ -12,7 +12,7 @@ pip install hivemind_bus_client
 
 ```python
 from time import sleep
-from mycroft_bus_client import Message
+from ovos_bus_client import Message
 from hivemind_bus_client import HiveMessageBusClient
 from hivemind_bus_client.decorators import on_escalate, \
     on_shared_bus, on_ping, on_broadcast, on_propagate, on_mycroft_message, \

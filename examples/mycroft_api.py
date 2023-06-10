@@ -1,6 +1,6 @@
 from hivemind_bus_client import HiveMessageBusClient, HiveMessage, \
     HiveMessageType
-from mycroft_bus_client import Message
+from ovos_bus_client import Message
 
 # these should never be equal! one travels down the wire and is an access token
 key = "ivf1NQSkQNogWYyr"

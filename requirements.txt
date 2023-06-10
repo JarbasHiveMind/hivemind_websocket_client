@@ -1,5 +1,3 @@
-websocket-client~=1.2.1
-pyee==8.1.0
-mycroft-messagebus-client>=0.9.4
+ovos-bus-client>=0.9.4
 ovos_utils
 pycryptodomex

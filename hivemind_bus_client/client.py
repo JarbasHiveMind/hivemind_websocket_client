@@ -6,7 +6,6 @@ import time
 import traceback
 from threading import Event, Thread
 
-from mycroft_bus_client import Message as MycroftMessage
 from pyee import ExecutorEventEmitter
 from websocket import WebSocketApp, WebSocketConnectionClosedException, \
     WebSocketException
@@ -14,6 +13,7 @@ from websocket import WebSocketApp, WebSocketConnectionClosedException, \
 from hivemind_bus_client.message import HiveMessage, HiveMessageType
 from hivemind_bus_client.util import serialize_message, \
     encrypt_as_json, decrypt_from_json
+from ovos_bus_client import Message as MycroftMessage
 
 LOG = logging.getLogger("HiveMind-websocket-client")
 

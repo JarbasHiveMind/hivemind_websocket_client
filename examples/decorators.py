@@ -1,5 +1,5 @@
 from time import sleep
-from mycroft_bus_client import Message
+from ovos_bus_client import Message
 from hivemind_bus_client import HiveMessageBusClient, HiveMessage, \
     HiveMessageType
 from hivemind_bus_client.decorators import on_payload, on_escalate, \

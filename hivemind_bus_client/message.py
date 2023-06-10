@@ -1,7 +1,7 @@
 from enum import Enum
 import json
 from ovos_utils.json_helper import merge_dict
-from mycroft_bus_client import Message
+from ovos_bus_client import Message
 
 
 class HiveMessageType(str, Enum):
