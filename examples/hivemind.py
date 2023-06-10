@@ -1,7 +1,7 @@
 from hivemind_bus_client import HiveMessageBusClient, HiveMessage, \
     HiveMessageType
 from hivemind_bus_client.decorators import on_hive_message
-from mycroft_bus_client import Message
+from ovos_bus_client import Message
 from time import sleep
 
 key = "ivf1NQSkQNogWYyr"
