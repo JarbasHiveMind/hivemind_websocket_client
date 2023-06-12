@@ -96,7 +96,9 @@ class HiveMindSlaveProtocol:
         self.hm.on(HiveMessageType.BROADCAST, self.handle_broadcast)
         self.hm.on(HiveMessageType.PROPAGATE, self.handle_propagate)
         self.hm.on(HiveMessageType.ESCALATE, self.handle_illegal_msg)
+        self.hm.on(HiveMessageType.SHARED_BUS, self.handle_illegal_msg)
         self.hm.on(HiveMessageType.BUS, self.handle_bus)
+        self.hm.on(HiveMessageType.HANDSHAKE, self.handle_handshake)
 
     @property
     def node_id(self):
@@ -107,7 +109,7 @@ class HiveMindSlaveProtocol:
     # hivemind events
     def handle_illegal_msg(self, message: HiveMessage):
         # this should not happen,
-        # ESCALATE is only sent from client -> server NOT server -> client
+        # only sent from client -> server NOT server -> client
         # TODO log, kill connection (?)
         pass
 

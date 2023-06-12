@@ -12,7 +12,6 @@ from websocket import WebSocketApp, WebSocketConnectionClosedException, \
     WebSocketException
 
 from hivemind_bus_client.message import HiveMessage, HiveMessageType
-from hivemind_bus_client.protocol import HiveMindSlaveProtocol
 from hivemind_bus_client.util import serialize_message, \
     encrypt_as_json, decrypt_from_json
 
@@ -379,6 +378,7 @@ class HiveNodeClient(HiveMessageBusClient):
 
     def __init__(self, key, bus=None, crypto_key=None, host='127.0.0.1', port=5678,
                  useragent="HiveNodeClientV0.0.1", share_bus=False, *args, **kwargs):
+        from hivemind_bus_client.protocol import HiveMindSlaveProtocol
         self.protocol = HiveMindSlaveProtocol(self, shared_bus=share_bus)
         self.protocol.bind(bus)
         super().__init__(key, crypto_key=crypto_key, host=host, port=port,
