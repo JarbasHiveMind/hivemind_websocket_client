@@ -5,9 +5,10 @@ from ovos_bus_client import Message as MycroftMessage
 from ovos_bus_client import MessageBusClient
 from ovos_bus_client.message import Message
 from ovos_utils.log import LOG
-
+from hivemind_bus_client.identity import NodeIdentity
 from hivemind_bus_client.client import HiveMessageBusClient
 from hivemind_bus_client.message import HiveMessage, HiveMessageType
+from poorman_handshake import HandShake, PasswordHandShake
 
 
 @dataclass()
@@ -77,6 +78,9 @@ class HiveMindSlaveProtocol:
     Master becomes able to inject arbitrary bus messages
     """
     hm: HiveMessageBusClient
+    identity: NodeIdentity = NodeIdentity()
+    handshake: HandShake = HandShake(identity.identity_file)
+    pswd_handshake: Optional[PasswordHandShake] = PasswordHandShake(identity.password) if identity.password else None
     internal_protocol: HiveMindSlaveInternalProtocol = None
     mpubkey: str = ""  # asc public PGP key from master
     shared_bus: bool = False
@@ -116,6 +120,42 @@ class HiveMindSlaveProtocol:
             node_id = message.payload.get("node_id", "")
             self.internal_protocol.node_id = node_id
             LOG.info(f"Connected to HiveMind: {node_id}")
+
+    def handle_handshake(self, message: HiveMessage):
+        # master is performing the handshake
+        if "envelope" in message.payload:
+            envelope = message.payload["envelope"]
+            if isinstance(self.handshake, PasswordHandShake):
+                LOG.info("Received password envelope")
+                self.handshake.receive_and_verify(envelope)  # validate master password matched
+                self.hm.crypto_key = self.handshake.secret  # update to new crypto key
+            else:
+                # if we have a pubkey let's verify the master node is who it claims to be
+                # currently this is sent in HELLO, but advance use cases can read it from somewhere else
+                if self.mpubkey:
+                    # authenticates the server to the client
+                    self.handshake.receive_and_verify(envelope, self.mpubkey)
+                else:
+                    # implicitly trust the server
+                    self.handshake.receive_handshake(envelope)
+                self.hm.crypto_key = self.handshake.secret  # update to new crypto key
+
+        # master is requesting handshake start
+        else:
+            required = message.payload["handshake"]
+
+            if not required and message.payload["crypto_key"] and self.hm.crypto_key:
+                pass  # we can use the pre-shared key and ignore this message
+                # TODO - flag to give preference to pre-shared key
+
+            # TODO - flag to give preference to / require password or not
+            # currently if password is set then it is always used
+            if message.payload["password"] and self.pswd_handshake is not None:
+                envelope = self.handshake.generate_handshake()
+                msg = HiveMessage(HiveMessageType.HANDSHAKE, {"envelope": envelope})
+            else:
+                msg = HiveMessage(HiveMessageType.HANDSHAKE, {"pubkey": self.handshake.pubkey})
+            self.hm.emit(msg)
 
     def handle_bus(self, message: HiveMessage):
         assert isinstance(message.payload, MycroftMessage)
