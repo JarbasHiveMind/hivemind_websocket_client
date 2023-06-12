@@ -41,3 +41,73 @@ sleep(50)
 
 bus.close()
 ```
+
+## Cli Usage
+
+```bash
+$ hivemind-client --help
+Usage: hivemind-client [OPTIONS] COMMAND [ARGS]...
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  escalate      escalate a single mycroft message
+  propagate     propagate a single mycroft message
+  send-mycroft  send a single mycroft message
+  terminal      simple cli interface to inject utterances and print speech
+
+$ hivemind-client terminal --help
+Usage: hivemind-client terminal [OPTIONS]
+
+  simple cli interface to inject utterances and print speech
+
+Options:
+  --key TEXT      HiveMind access key
+  --host TEXT     HiveMind host
+  --port INTEGER  HiveMind port number
+  --help          Show this message and exit.
+
+
+$ hivemind-client send-mycroft --help
+Usage: hivemind-client send-mycroft [OPTIONS]
+
+  send a single mycroft message
+
+Options:
+  --key TEXT      HiveMind access key
+  --host TEXT     HiveMind host
+  --port INTEGER  HiveMind port number
+  --msg TEXT      ovos message type to inject
+  --payload TEXT  ovos message json payload
+  --help          Show this message and exit.
+
+
+$ hivemind-client escalate --help
+Usage: hivemind-client escalate [OPTIONS]
+
+  escalate a single mycroft message
+
+Options:
+  --key TEXT      HiveMind access key
+  --host TEXT     HiveMind host
+  --port INTEGER  HiveMind port number
+  --msg TEXT      ovos message type to inject
+  --payload TEXT  ovos message json payload
+  --help          Show this message and exit.
+
+
+$ hivemind-client propagate --help
+Usage: hivemind-client propagate [OPTIONS]
+
+  propagate a single mycroft message
+
+Options:
+  --key TEXT      HiveMind access key
+  --host TEXT     HiveMind host
+  --port INTEGER  HiveMind port number
+  --msg TEXT      ovos message type to inject
+  --payload TEXT  ovos message json payload
+  --help          Show this message and exit.
+
+```
