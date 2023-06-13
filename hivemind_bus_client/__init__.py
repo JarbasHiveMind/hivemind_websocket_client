@@ -1,2 +1,2 @@
-from .client import HiveMessageBusClient, HiveNodeClient
+from .client import HiveMessageBusClient
 from .message import HiveMessage, HiveMessageType

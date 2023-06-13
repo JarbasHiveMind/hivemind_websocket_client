@@ -1,15 +1,13 @@
 import base64
 import json
 import ssl
-import time
-import traceback
-from threading import Event, Thread
+from threading import Event
+from typing import Union
 
-from ovos_bus_client import Message as MycroftMessage
+from ovos_bus_client import Message as MycroftMessage, MessageBusClient as OVOSBusClient
 from ovos_utils.log import LOG
-from pyee import ExecutorEventEmitter
-from websocket import WebSocketApp, WebSocketConnectionClosedException, \
-    WebSocketException
+from ovos_utils.messagebus import FakeBus
+from websocket import WebSocketApp, WebSocketConnectionClosedException
 
 from hivemind_bus_client.message import HiveMessage, HiveMessageType
 from hivemind_bus_client.util import serialize_message, \
@@ -78,22 +76,33 @@ class HivePayloadWaiter(HiveMessageWaiter):
             self.bus.once(self.msg_type, self._handler)
 
 
-class HiveMessageBusClient:
-    def __init__(self, key, crypto_key=None, host='127.0.0.1', port=5678,
-                 useragent="HiveMessageBusClientV0.0.1", self_signed=False):
-        self.ssl = host.startswith("wss://")
+class HiveMessageBusClient(OVOSBusClient):
+    def __init__(self, key, password=None, crypto_key=None, host='127.0.0.1', port=5678,
+                 useragent="HiveMessageBusClientV0.0.1", self_signed=True, share_bus=False):
+        ssl = host.startswith("wss://")
+        host = host.replace("ws://", "").replace("wss://", "").strip()
         self.key = key
         self.useragent = useragent
         self.crypto_key = crypto_key
-        self.host = host.replace("ws://", "").replace("wss://", "").strip()
-        self.port = port
-        self.emitter = ExecutorEventEmitter()
-        self.client = self.create_client()
-        self.retry = 5
-        self.connected_event = Event()
-        self.started_running = False
+        self.password = password
         self.allow_self_signed = self_signed
         self._mycroft_events = {}  # msg_type: [handler]
+        self.password = password
+        self.share_bus = share_bus
+        super().__init__(host=host, port=port, ssl=ssl)
+
+    def connect(self, bus=FakeBus()):
+        from hivemind_bus_client.protocol import HiveMindSlaveProtocol
+        from hivemind_bus_client.identity import NodeIdentity
+        ident = NodeIdentity()
+        ident.password = self.password or ident.password
+        LOG.info("Initializing HiveMindSlaveProtocol")
+        self.protocol = HiveMindSlaveProtocol(self,
+                                              shared_bus=self.share_bus,
+                                              identity=ident)
+        LOG.info("Connecting to Hivemind")
+        self.run_in_thread()
+        self.protocol.bind(bus)
 
     @staticmethod
     def build_url(key, host='127.0.0.1', port=5678,
@@ -104,20 +113,13 @@ class HiveMessageBusClient:
         return f'{scheme}://{host}:{port}?authorization={key}'
 
     def create_client(self):
-        url = self.build_url(ssl=self.ssl,
-                             host=self.host,
-                             port=self.port,
+        url = self.build_url(ssl=self.config.ssl,
+                             host=self.config.host,
+                             port=self.config.port,
                              key=self.key,
                              useragent=self.useragent)
         return WebSocketApp(url, on_open=self.on_open, on_close=self.on_close,
                             on_error=self.on_error, on_message=self.on_message)
-
-    def run_in_thread(self):
-        """Launches the run_forever in a separate daemon thread."""
-        t = Thread(target=self.run_forever)
-        t.daemon = True
-        t.start()
-        return t
 
     def run_forever(self):
         self.started_running = True
@@ -129,70 +131,41 @@ class HiveMessageBusClient:
         else:
             self.client.run_forever()
 
-    def close(self):
-        self.client.close()
-        self.connected_event.clear()
-
     # event handlers
-    def on_open(self, _):
-        LOG.info("Connected")
-        self.connected_event.set()
-        self.emitter.emit("open")
-        # Restore reconnect timer to 5 seconds on successful connect
-        self.retry = 5
-
-    def on_close(self, _):
-        self.emitter.emit("close")
-
-    def on_error(self, _, error):
-        """ On error start trying to reconnect to the websocket. """
-        LOG.exception('=== ' + repr(error) + ' ===')
-
-        try:
-            self.emitter.emit('error', error)
-            if self.client.keep_running:
-                self.client.close()
-        except Exception as e:
-            LOG.error('Exception closing websocket: ' + repr(e))
-
-        LOG.warning(
-            "HiveMessage Bus Client will reconnect in %d seconds." % self.retry
-        )
-        time.sleep(self.retry)
-        self.retry = min(self.retry * 2, 60)
-        try:
-            self.emitter.emit('reconnecting')
-            self.client = self.create_client()
-            self.run_forever()
-        except WebSocketException:
-            pass
-
-    def on_message(self, _, message):
+    def on_message(self,*args):
+        if len(args) == 1:
+            message = args[0]
+        else:
+            message = args[1]
         if self.crypto_key:
             if "ciphertext" in message:
+                LOG.info(f"got encrypted message: {len(message)}")
                 message = decrypt_from_json(self.crypto_key, message)
             else:
                 LOG.warning("Message was unencrypted")
         if isinstance(message, str):
             message = json.loads(message)
+        LOG.info(f"received HiveMind message: {message}")
         self.emitter.emit('message', message)  # raw message
         self._handle_hive_protocol(HiveMessage(**message))
 
-    def _handle_hive_protocol(self, message):
+    def _handle_hive_protocol(self, message: HiveMessage):
         if message.msg_type == HiveMessageType.BUS:
             self._fire_mycroft_handlers(message)
         self.emitter.emit(message.msg_type, message)  # hive message
 
-    def emit(self, message):
-        if not self.connected_event.wait(10):
-            if not self.started_running:
-                raise ValueError('You must execute run_forever() '
-                                 'before emitting messages')
-            self.connected_event.wait()
-
+    def emit(self, message: Union[MycroftMessage, HiveMessage]):
         if isinstance(message, MycroftMessage):
             message = HiveMessage(msg_type=HiveMessageType.BUS,
                                   payload=message)
+        if not self.connected_event.is_set():
+            LOG.warning("hivemind connection not ready")
+            if not self.connected_event.wait(10):
+                if not self.started_running:
+                    raise ValueError('You must execute run_forever() '
+                                     'before emitting messages')
+                self.connected_event.wait()
+
         try:
             # auto inject context for proper routing, this is confusing for
             # end users if they need to do it manually, error prone and easy
@@ -207,8 +180,10 @@ class HiveMessageBusClient:
                     ctxt["destination"] = "HiveMind"
                 message.payload.context = ctxt
             payload = serialize_message(message)
+            LOG.info(f"sending to HiveMind: {payload}")
             if self.crypto_key:
                 payload = encrypt_as_json(self.crypto_key, payload)
+                LOG.info(f"encrypted size: {len(payload)}")
 
             self.client.send(payload)
         except WebSocketConnectionClosedException:
@@ -216,7 +191,7 @@ class HiveMessageBusClient:
                         'has been closed')
 
     # mycroft events api
-    def _fire_mycroft_handlers(self, message):
+    def _fire_mycroft_handlers(self, message: Union[MycroftMessage, HiveMessage]):
         handlers = []
         if isinstance(message, MycroftMessage):
             handlers = self._mycroft_events.get(message.msg_type) or []
@@ -229,11 +204,12 @@ class HiveMessageBusClient:
                 LOG.exception("Failed to call event handler")
                 continue
 
-    def emit_mycroft(self, message):
+    def emit_mycroft(self, message: MycroftMessage):
         message = HiveMessage(msg_type=HiveMessageType.BUS, payload=message)
         self.emit(message)
 
     def on_mycroft(self, mycroft_msg_type, func):
+        LOG.info(f"registering mycroft event: {mycroft_msg_type}")
         self._mycroft_events[mycroft_msg_type] = self._mycroft_events.get(mycroft_msg_type) or []
         self._mycroft_events[mycroft_msg_type].append(func)
 
@@ -244,46 +220,12 @@ class HiveMessageBusClient:
             # this could be done better,
             # but makes this lib almost a drop in replacement
             # for the mycroft bus client
+            LOG.info(f"registering mycroft handler: {event_name}")
             self.on_mycroft(event_name, func)
         else:
             # hivemind message
+            LOG.info(f"registering handler: {event_name}")
             self.emitter.on(event_name, func)
-
-    def once(self, event_name, func):
-        self.emitter.once(event_name, func)
-
-    def remove(self, event_name, func):
-        try:
-            if not event_name in self.emitter._events:
-                LOG.debug("Not able to find '" + str(event_name) + "'")
-            self.emitter.remove_listener(event_name, func)
-        except ValueError:
-            LOG.warning('Failed to remove event {}: {}'.format(event_name,
-                                                               str(func)))
-            for line in traceback.format_stack():
-                LOG.warning(line.strip())
-
-            if not event_name in self.emitter._events:
-                LOG.debug("Not able to find '" + str(event_name) + "'")
-            LOG.warning("Existing events: " + str(self.emitter._events))
-            for evt in self.emitter._events:
-                LOG.warning("   " + str(evt))
-                LOG.warning("       " + str(self.emitter._events[evt]))
-            if event_name in self.emitter._events:
-                LOG.debug("Removing found '" + str(event_name) + "'")
-            else:
-                LOG.debug("Not able to find '" + str(event_name) + "'")
-            LOG.warning('----- End dump -----')
-
-    def remove_all_listeners(self, event_name):
-        """Remove all listeners connected to event_name.
-
-            Arguments:
-                event_name: event from which to remove listeners
-        """
-        if event_name is None:
-            raise ValueError
-        self.emitter.remove_all_listeners(event_name)
 
     # utility
     def wait_for_message(self, message_type, timeout=3.0):
@@ -299,7 +241,7 @@ class HiveMessageBusClient:
 
         return HiveMessageWaiter(self, message_type).wait(timeout)
 
-    def wait_for_payload(self, payload_type,
+    def wait_for_payload(self, payload_type: str,
                          message_type=HiveMessageType.THIRDPRTY,
                          timeout=3.0):
         """Wait for a message of a specific type + payload of a specific type.
@@ -316,7 +258,7 @@ class HiveMessageBusClient:
         return HivePayloadWaiter(bus=self, payload_type=payload_type,
                                  message_type=message_type).wait(timeout)
 
-    def wait_for_mycroft(self, mycroft_msg_type, timeout=3.0):
+    def wait_for_mycroft(self, mycroft_msg_type: str, timeout: float=3.0):
         return self.wait_for_payload(mycroft_msg_type, timeout=timeout,
                                      message_type=HiveMessageType.BUS)
 
@@ -363,23 +305,3 @@ class HiveMessageBusClient:
         # Send message and wait for it's response
         self.emit(message)
         return waiter.wait(timeout)
-
-
-class HiveNodeClient(HiveMessageBusClient):
-    """
-    Same as HiveMessageBusClient, but parses hivemind protocol messages.
-        ie, it will execute PROPAGATE, ESCALATE, BROADCAST etc.
-
-    Some message types can only be handled by hivemind server (eg. BROADCAST)
-    a mycroft websocket connection is needed to forward requests over it,
-    if a hivemind server is connected to the same bus they will be handled
-
-    """
-
-    def __init__(self, key, bus=None, crypto_key=None, host='127.0.0.1', port=5678,
-                 useragent="HiveNodeClientV0.0.1", share_bus=False, *args, **kwargs):
-        from hivemind_bus_client.protocol import HiveMindSlaveProtocol
-        self.protocol = HiveMindSlaveProtocol(self, shared_bus=share_bus)
-        self.protocol.bind(bus)
-        super().__init__(key, crypto_key=crypto_key, host=host, port=port,
-                         useragent=useragent, *args, **kwargs)

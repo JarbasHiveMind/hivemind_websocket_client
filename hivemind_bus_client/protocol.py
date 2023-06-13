@@ -79,7 +79,7 @@ class HiveMindSlaveProtocol:
     """
     hm: HiveMessageBusClient
     identity: NodeIdentity = NodeIdentity()
-    handshake: HandShake = HandShake(identity.identity_file)
+    handshake: HandShake = HandShake(identity.private_key)
     pswd_handshake: Optional[PasswordHandShake] = PasswordHandShake(identity.password) if identity.password else None
     internal_protocol: HiveMindSlaveInternalProtocol = None
     mpubkey: str = ""  # asc public PGP key from master
@@ -90,8 +90,10 @@ class HiveMindSlaveProtocol:
             bus = MessageBusClient()
             bus.run_in_thread()
             bus.connected_event.wait()
+        LOG.info("Initializing HiveMindSlaveInternalProtocol")
         self.internal_protocol = HiveMindSlaveInternalProtocol(bus=bus, hm_bus=self.hm)
         self.internal_protocol.register_bus_handlers()
+        LOG.info("registering protocol handlers")
         self.hm.on(HiveMessageType.HELLO, self.handle_hello)
         self.hm.on(HiveMessageType.BROADCAST, self.handle_broadcast)
         self.hm.on(HiveMessageType.PROPAGATE, self.handle_propagate)
@@ -111,12 +113,13 @@ class HiveMindSlaveProtocol:
         # this should not happen,
         # only sent from client -> server NOT server -> client
         # TODO log, kill connection (?)
-        pass
+        LOG.warning(f"illegal message {message}")
 
     def handle_hello(self, message: HiveMessage):
         # this check is because other nodes in the hive
         # may also send HELLO with their pubkey
         # only want this on the first connection
+        LOG.info(f"HELLO: {message.payload}")
         if not self.node_id:
             self.mpubkey = message.payload.get("pubkey")
             node_id = message.payload.get("node_id", "")
@@ -124,12 +127,13 @@ class HiveMindSlaveProtocol:
             LOG.info(f"Connected to HiveMind: {node_id}")
 
     def handle_handshake(self, message: HiveMessage):
+        LOG.info(f"HANDSHAKE: {message.payload}")
         # master is performing the handshake
         if "envelope" in message.payload:
             envelope = message.payload["envelope"]
-            if isinstance(self.handshake, PasswordHandShake):
+            if self.pswd_handshake is not None:
                 LOG.info("Received password envelope")
-                self.handshake.receive_and_verify(envelope)  # validate master password matched
+                self.pswd_handshake.receive_and_verify(envelope)  # validate master password matched
                 self.hm.crypto_key = self.handshake.secret  # update to new crypto key
             else:
                 # if we have a pubkey let's verify the master node is who it claims to be
@@ -146,20 +150,24 @@ class HiveMindSlaveProtocol:
         else:
             required = message.payload["handshake"]
 
-            if not required and message.payload["crypto_key"] and self.hm.crypto_key:
+            if not required and message.payload.get("crypto_key") and self.hm.crypto_key:
                 pass  # we can use the pre-shared key and ignore this message
                 # TODO - flag to give preference to pre-shared key
 
             # TODO - flag to give preference to / require password or not
             # currently if password is set then it is always used
+            if self.identity.password:
+                self.pswd_handshake = PasswordHandShake(self.identity.password)
+
             if message.payload["password"] and self.pswd_handshake is not None:
-                envelope = self.handshake.generate_handshake()
+                envelope = self.pswd_handshake.generate_handshake()
                 msg = HiveMessage(HiveMessageType.HANDSHAKE, {"envelope": envelope})
             else:
                 msg = HiveMessage(HiveMessageType.HANDSHAKE, {"pubkey": self.handshake.pubkey})
             self.hm.emit(msg)
 
     def handle_bus(self, message: HiveMessage):
+        LOG.info(f"BUS: {message.payload}")
         assert isinstance(message.payload, MycroftMessage)
         # master wants to inject message into mycroft bus
         pload = message.payload
@@ -167,6 +175,7 @@ class HiveMindSlaveProtocol:
         self.internal_protocol.bus.emit(pload)
 
     def handle_broadcast(self, message: HiveMessage):
+        LOG.info(f"BROADCAST: {message.payload}")
         # if this device is also a hivemind server
         # forward to HiveMindListenerInternalProtocol
         data = message.serialize()
@@ -174,6 +183,7 @@ class HiveMindSlaveProtocol:
         self.internal_protocol.bus.emit(MycroftMessage('hive.send.downstream', data, ctxt))
 
     def handle_propagate(self, message: HiveMessage):
+        LOG.info(f"PROPAGATE: {message.payload}")
         # if this device is also a hivemind server
         # forward to HiveMindListenerInternalProtocol
         data = message.serialize()

@@ -5,9 +5,11 @@ from ovos_bus_client import Message
 from ovos_config import Configuration
 from ovos_utils.messagebus import FakeBus
 
-from hivemind_bus_client.client import HiveNodeClient, HiveMessageBusClient
+from hivemind_bus_client.client import HiveMessageBusClient
 from hivemind_bus_client.message import HiveMessage, HiveMessageType
+from ovos_utils.log import LOG
 
+LOG.set_level("DEBUG")
 
 @click.group()
 def hmclient_cmds():
@@ -16,15 +18,16 @@ def hmclient_cmds():
 
 @hmclient_cmds.command(help="simple cli interface to inject utterances and print speech", name="terminal")
 @click.option("--key", help="HiveMind access key", type=str)
+@click.option("--password", help="HiveMind password", type=str)
 @click.option("--host", help="HiveMind host", type=str,
               default=Configuration().get('websocket', {}).get("host", "0.0.0.0"))
 @click.option("--port", help="HiveMind port number", type=int,
               default=Configuration().get('websocket', {}).get("port", 5678))
-def terminal(key: str, host: str, port: int):
-    node = HiveNodeClient(key, bus=FakeBus(), host=host, port=port)
+def terminal(key: str, password: str, host: str, port: int):
+    node = HiveMessageBusClient(key, host=host, port=port, password=password)
+    node.connect(FakeBus())
 
-    node.run_in_thread()
-    node.connected_event.wait()
+    # node.connected_event.wait()
     print("== connected to HiveMind")
 
     def handle_speak(message: Message):
@@ -40,6 +43,9 @@ def terminal(key: str, host: str, port: int):
                 Message("recognizer_loop:utterance", {"utterance": utt})
             )
         except KeyboardInterrupt:
+            break
+        except Exception:
+            LOG.exception("error")
             break
 
     node.close()
