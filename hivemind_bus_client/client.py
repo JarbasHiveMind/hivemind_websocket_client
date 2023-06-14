@@ -89,6 +89,7 @@ class HiveMessageBusClient(OVOSBusClient):
         self._mycroft_events = {}  # msg_type: [handler]
         self.password = password
         self.share_bus = share_bus
+        self.handshake_event = Event()
         super().__init__(host=host, port=port, ssl=ssl)
 
     def connect(self, bus=FakeBus()):
@@ -103,6 +104,7 @@ class HiveMessageBusClient(OVOSBusClient):
         LOG.info("Connecting to Hivemind")
         self.run_in_thread()
         self.protocol.bind(bus)
+        self.handshake_event.wait()
 
     @staticmethod
     def build_url(key, host='127.0.0.1', port=5678,

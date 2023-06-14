@@ -134,8 +134,9 @@ class HiveMindSlaveProtocol:
             if self.pswd_handshake is not None:
                 LOG.info("Received password envelope")
                 self.pswd_handshake.receive_and_verify(envelope)  # validate master password matched
-                self.hm.crypto_key = self.handshake.secret  # update to new crypto key
+                self.hm.crypto_key = self.pswd_handshake.secret  # update to new crypto key
             else:
+                LOG.info("Received pubkey envelope")
                 # if we have a pubkey let's verify the master node is who it claims to be
                 # currently this is sent in HELLO, but advance use cases can read it from somewhere else
                 if self.mpubkey:
@@ -145,7 +146,7 @@ class HiveMindSlaveProtocol:
                     # implicitly trust the server
                     self.handshake.receive_handshake(envelope)
                 self.hm.crypto_key = self.handshake.secret  # update to new crypto key
-
+            self.hm.handshake_event.set()
         # master is requesting handshake start
         else:
             required = message.payload["handshake"]
