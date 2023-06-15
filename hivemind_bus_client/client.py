@@ -7,6 +7,7 @@ from typing import Union
 from ovos_bus_client import Message as MycroftMessage, MessageBusClient as OVOSBusClient
 from ovos_utils.log import LOG
 from ovos_utils.messagebus import FakeBus
+from pyee import EventEmitter
 from websocket import WebSocketApp, WebSocketConnectionClosedException
 
 from hivemind_bus_client.message import HiveMessage, HiveMessageType
@@ -90,7 +91,7 @@ class HiveMessageBusClient(OVOSBusClient):
         self.password = password
         self.share_bus = share_bus
         self.handshake_event = Event()
-        super().__init__(host=host, port=port, ssl=ssl)
+        super().__init__(host=host, port=port, ssl=ssl, emitter=EventEmitter())
 
     def connect(self, bus=FakeBus()):
         from hivemind_bus_client.protocol import HiveMindSlaveProtocol
@@ -134,24 +135,24 @@ class HiveMessageBusClient(OVOSBusClient):
             self.client.run_forever()
 
     # event handlers
-    def on_message(self,*args):
+    def on_message(self, *args):
         if len(args) == 1:
             message = args[0]
         else:
             message = args[1]
         if self.crypto_key:
             if "ciphertext" in message:
-                LOG.info(f"got encrypted message: {len(message)}")
+                #LOG.info(f"got encrypted message: {len(message)}")
                 message = decrypt_from_json(self.crypto_key, message)
             else:
                 LOG.warning("Message was unencrypted")
         if isinstance(message, str):
             message = json.loads(message)
-        LOG.info(f"received HiveMind message: {message}")
         self.emitter.emit('message', message)  # raw message
         self._handle_hive_protocol(HiveMessage(**message))
 
     def _handle_hive_protocol(self, message: HiveMessage):
+        # LOG.debug(f"received HiveMind message: {message.msg_type}")
         if message.msg_type == HiveMessageType.BUS:
             self._fire_mycroft_handlers(message)
         self.emitter.emit(message.msg_type, message)  # hive message
@@ -185,7 +186,7 @@ class HiveMessageBusClient(OVOSBusClient):
             LOG.info(f"sending to HiveMind: {payload}")
             if self.crypto_key:
                 payload = encrypt_as_json(self.crypto_key, payload)
-                LOG.info(f"encrypted size: {len(payload)}")
+                # LOG.info(f"encrypted size: {len(payload)}")
 
             self.client.send(payload)
         except WebSocketConnectionClosedException:

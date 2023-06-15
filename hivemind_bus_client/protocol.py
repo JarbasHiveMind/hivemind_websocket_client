@@ -168,7 +168,7 @@ class HiveMindSlaveProtocol:
             self.hm.emit(msg)
 
     def handle_bus(self, message: HiveMessage):
-        LOG.info(f"BUS: {message.payload}")
+        LOG.info(f"BUS: {message.payload.msg_type}")
         assert isinstance(message.payload, MycroftMessage)
         # master wants to inject message into mycroft bus
         pload = message.payload
