@@ -142,15 +142,20 @@ class HiveMessageBusClient(OVOSBusClient):
             message = args[0]
         else:
             message = args[1]
-        if isinstance(message, bytes):
-            message = decode_bitstring(message)
         if self.crypto_key:
+            # TODO - handle binary encryption
+            if isinstance(message, bytes):
+                pass
+
             if "ciphertext" in message:
                 # LOG.info(f"got encrypted message: {len(message)}")
                 message = decrypt_from_json(self.crypto_key, message)
             else:
                 LOG.warning("Message was unencrypted")
-        if isinstance(message, str):
+
+        if isinstance(message, bytes):
+            message = decode_bitstring(message)
+        elif isinstance(message, str):
             message = json.loads(message)
         self.emitter.emit('message', message)  # raw message
         self._handle_hive_protocol(HiveMessage(**message))
