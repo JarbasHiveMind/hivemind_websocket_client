@@ -164,10 +164,10 @@ class HiveMindSlaveProtocol:
             if message.payload["password"] and self.pswd_handshake is not None:
                 envelope = self.pswd_handshake.generate_handshake()
                 msg = HiveMessage(HiveMessageType.HANDSHAKE, {"envelope": envelope,
-                                                              "serialize": bin_serialize})
+                                                              "binarize": bin_serialize})
             else:
                 msg = HiveMessage(HiveMessageType.HANDSHAKE, {"pubkey": self.handshake.pubkey,
-                                                              "serialize": bin_serialize})
+                                                              "binarize": bin_serialize})
             self.hm.emit(msg)
 
     def handle_bus(self, message: HiveMessage):
