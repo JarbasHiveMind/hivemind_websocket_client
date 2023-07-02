@@ -14,7 +14,7 @@ from websocket import WebSocketApp, WebSocketConnectionClosedException
 from hivemind_bus_client.message import HiveMessage, HiveMessageType
 from hivemind_bus_client.serialization import get_bitstring, decode_bitstring
 from hivemind_bus_client.util import serialize_message, \
-    encrypt_as_json, decrypt_from_json
+    encrypt_as_json, decrypt_from_json, encrypt_bin, decrypt_bin
 
 
 class HiveMessageWaiter:
@@ -143,15 +143,15 @@ class HiveMessageBusClient(OVOSBusClient):
         else:
             message = args[1]
         if self.crypto_key:
-            # TODO - handle binary encryption
+            # handle binary encryption
             if isinstance(message, bytes):
-                pass
-
-            if "ciphertext" in message:
-                # LOG.info(f"got encrypted message: {len(message)}")
+                message = decrypt_bin(self.crypto_key, message)
+            # handle json encryption
+            elif "ciphertext" in message:
+                # LOG.debug(f"got encrypted message: {len(message)}")
                 message = decrypt_from_json(self.crypto_key, message)
             else:
-                LOG.warning("Message was unencrypted")
+                LOG.info("Message was unencrypted")
 
         if isinstance(message, bytes):
             message = decode_bitstring(message)
@@ -193,19 +193,22 @@ class HiveMessageBusClient(OVOSBusClient):
                     ctxt["destination"] = "HiveMind"
                 message.payload.context = ctxt
 
-            payload = serialize_message(message)
-            LOG.info(f"sending to HiveMind: {payload}")
-            if self.crypto_key:
-                payload = encrypt_as_json(self.crypto_key, payload)
-                # LOG.info(f"encrypted size: {len(payload)}")
+            ws_payload = serialize_message(message)
+            LOG.info(f"sending to HiveMind: {ws_payload}")
 
             if binarize:
                 bitstr = get_bitstring(hive_type=message.msg_type,
                                        payload=message.payload,
                                        compressed=compress)
-                self.client.send(bitstr.bytes, ABNF.OPCODE_BINARY)
+                if self.crypto_key:
+                    ws_payload = encrypt_bin(self.crypto_key, bitstr.bytes)
+                else:
+                    ws_payload = bitstr.bytes
+                self.client.send(ws_payload, ABNF.OPCODE_BINARY)
             else:
-                self.client.send(payload)
+                if self.crypto_key:
+                    ws_payload = encrypt_as_json(self.crypto_key, ws_payload)
+                self.client.send(ws_payload)
 
         except WebSocketConnectionClosedException:
             LOG.warning(f'Could not send {message.msg_type} message because connection '
