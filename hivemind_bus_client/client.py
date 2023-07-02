@@ -166,8 +166,7 @@ class HiveMessageBusClient(OVOSBusClient):
             self._fire_mycroft_handlers(message)
         self.emitter.emit(message.msg_type, message)  # hive message
 
-    def emit(self, message: Union[MycroftMessage, HiveMessage],
-             binarize=False, compress=False):
+    def emit(self, message: Union[MycroftMessage, HiveMessage], compress=False):
         if isinstance(message, MycroftMessage):
             message = HiveMessage(msg_type=HiveMessageType.BUS,
                                   payload=message)
@@ -194,8 +193,11 @@ class HiveMessageBusClient(OVOSBusClient):
                 message.payload.context = ctxt
 
             LOG.debug(f"sending to HiveMind: {message.msg_type}")
+            binarize = False
             if message.msg_type == HiveMessageType.BINARY:
                 binarize = True
+            elif message.msg_type not in [HiveMessageType.HELLO, HiveMessageType.HANDSHAKE]:
+                binarize = self.protocol.binarize
 
             if binarize:
                 bitstr = get_bitstring(hive_type=message.msg_type,
