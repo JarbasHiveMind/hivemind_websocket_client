@@ -8,7 +8,7 @@ from hivemind_bus_client.exceptions import UnsupportedProtocolVersion
 from hivemind_bus_client.message import HiveMessageType, HiveMessage
 from hivemind_bus_client.util import compress_payload, decompress_payload, cast2bytes, bytes2str
 
-PROTOCOL_VERSION = 0  # integer, a version increase signals new functionality added
+PROTOCOL_VERSION = 1  # integer, a version increase signals new functionality added
                       # version 0 is the original hivemind protocol, 1 supports handshake + binary
 
 
