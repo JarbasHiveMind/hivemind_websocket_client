@@ -193,8 +193,9 @@ class HiveMessageBusClient(OVOSBusClient):
                     ctxt["destination"] = "HiveMind"
                 message.payload.context = ctxt
 
-            ws_payload = serialize_message(message)
-            LOG.info(f"sending to HiveMind: {ws_payload}")
+            LOG.debug(f"sending to HiveMind: {message.msg_type}")
+            if message.msg_type == HiveMessageType.BINARY:
+                binarize = True
 
             if binarize:
                 bitstr = get_bitstring(hive_type=message.msg_type,
@@ -206,6 +207,7 @@ class HiveMessageBusClient(OVOSBusClient):
                     ws_payload = bitstr.bytes
                 self.client.send(ws_payload, ABNF.OPCODE_BINARY)
             else:
+                ws_payload = serialize_message(message)
                 if self.crypto_key:
                     ws_payload = encrypt_as_json(self.crypto_key, ws_payload)
                 self.client.send(ws_payload)
