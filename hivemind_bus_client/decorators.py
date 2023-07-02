@@ -180,19 +180,6 @@ def on_rendezvous(payload_type, bus):
     return wrapped_handler
 
 
-def on_registry_opcode(payload_type, bus):
-    # Begin wrapper
-    def wrapped_handler(func):
-        waiter = HivePayloadListener(bus=bus, payload_type=payload_type,
-                                     message_type=HiveMessageType.THIRDPRTY)
-        waiter.add_handler(func)
-        waiter.listen()
-        func.shutdown = waiter.shutdown
-        return func
-
-    return wrapped_handler
-
-
 # low level
 def on_third_party(bus):
     # Begin wrapper

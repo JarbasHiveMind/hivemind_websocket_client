@@ -3,14 +3,13 @@ from enum import IntEnum
 from inspect import signature
 
 from bitstring import BitArray, BitStream
+
 from hivemind_bus_client.exceptions import UnsupportedProtocolVersion
 from hivemind_bus_client.message import HiveMessageType, HiveMessage
-from hivemind_bus_client.registry import decode_action, encode_action
 from hivemind_bus_client.util import compress_payload, decompress_payload, cast2bytes, bytes2str
 
-
 PROTOCOL_VERSION = 0  # integer, a version increase signals new functionality added
-                      # version 0 is alpha, nothing is stable until we reach version 1
+                      # version 0 is the original hivemind protocol, 1 supports handshake + binary
 
 
 class HiveMindBinaryPayloadType(IntEnum):
@@ -34,8 +33,7 @@ _INT2TYPE = {0: HiveMessageType.HANDSHAKE,
              9: HiveMessageType.PING,
              10: HiveMessageType.RENDEZVOUS,
              11: HiveMessageType.THIRDPRTY,
-             12: HiveMessageType.BINARY,
-             13: HiveMessageType.ACTION}
+             12: HiveMessageType.BINARY}
 
 
 def get_bitstring(hive_type=HiveMessageType.BUS, payload=None,
@@ -66,15 +64,15 @@ def _get_bitstring_v1(hive_type=HiveMessageType.BUS, payload=None,
     s.append(f'uint:8={len(hivemeta)}')  # 8 bit unsigned integer - N of bytes for metadata
     s.append(hivemeta)  # arbitrary hivemind meta
 
+    # when payload is binary data meant to be passed along raw and not parsed
+    if hive_type == HiveMessageType.BINARY:
+        # 4 bit unsigned integer - integer indicating pseudo format of bin content
+        s.append(f'uint:4={binmap.get(binary_type, 0)}')
     # the remaining bits are the payload
-    if hive_type != HiveMessageType.ACTION:
+    else:
         if hasattr(payload, "serialize"):
             payload = payload.serialize()
         payload = cast2bytes(payload, compressed)
-    # when payload is binary data meant to be passed along raw and not parsed
-    elif hive_type == HiveMessageType.BINARY:
-        # 4 bit unsigned integer - integer indicating pseudo format of bin content
-        s.append(f'uint:4={binmap.get(binary_type, 0)}')
 
     s.append(payload)
     return s
@@ -113,20 +111,19 @@ def _decode_bitstring_v1(s):
     payload_len = len(s) - s.pos
     payload = s.read(payload_len)
 
-    if hive_type == HiveMessageType.ACTION:
-        payload = decode_action(payload)
-    elif not is_bin:
+    if not is_bin:
         payload = bytes2str(payload.bytes, compressed)
     else:
         payload = payload.bytes
         meta["bin_type"] = bin_type
-        # error correction
-        # a manually crafted message could have a hive type mismatch
-        if hive_type != HiveMessageType.BINARY:
-            meta["msg_type"] = hive_type
-            hive_type = HiveMessageType.BINARY
 
     return HiveMessage(hive_type, payload, meta=meta, **kwargs)
+
+
+def mycroft2bitstring(msg, compressed=False):
+    if isinstance(msg, str):
+        msg = Message.deserialize(msg)
+    return get_bitstring(HiveMessageType.BUS, payload=msg, hivemeta=msg.context, compressed=compressed)
 
 
 if __name__ == "__main__":
@@ -169,6 +166,8 @@ Mycroft announced that a third hardware project, Mark III, will be offered throu
     print(decoded)
 
     compressed = compress_payload(text).hex()
+
+
     # 789c5590c16e84300c44ef7cc51c5ba942bdee1fb4528ffb03261848156c9418e8fe7d9daebab0b72863cfbcf1758a05c32ac1a20afc6d1363c971a67c4314e33c506098bae0eaacfd9a18945446ecd126343d079d97cca5bcbc3e9c5a5c9f8c33db9aa5a0bb1943bb6f0ee66ffc6f4677abc13d19a119e3c65223a3810a16ca34b39354533e3c27d748d4f7f231834029718fc41b27ec530c8e18542c6bba97e31f6331e870a457de4fcf92bfc6a3bb746c3b3bc47bc5b8b4f8d29d8b61a3b4b27f36c5487aefa719a2672337e971c149efeae253d4471c2b7385b9633a4b739a78c39899ec3122a3dff9c4ebf54e776c7f0106a5a377
 
     def measure_compression(text):
