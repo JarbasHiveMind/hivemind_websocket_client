@@ -166,7 +166,7 @@ class HiveMessageBusClient(OVOSBusClient):
             self._fire_mycroft_handlers(message)
         self.emitter.emit(message.msg_type, message)  # hive message
 
-    def emit(self, message: Union[MycroftMessage, HiveMessage], compress=False):
+    def emit(self, message: Union[MycroftMessage, HiveMessage]):
         if isinstance(message, MycroftMessage):
             message = HiveMessage(msg_type=HiveMessageType.BUS,
                                   payload=message)
@@ -201,8 +201,7 @@ class HiveMessageBusClient(OVOSBusClient):
 
             if binarize:
                 bitstr = get_bitstring(hive_type=message.msg_type,
-                                       payload=message.payload,
-                                       compressed=compress)
+                                       payload=message.payload)
                 if self.crypto_key:
                     ws_payload = encrypt_bin(self.crypto_key, bitstr.bytes)
                 else:

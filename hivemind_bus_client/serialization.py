@@ -37,16 +37,22 @@ _INT2TYPE = {0: HiveMessageType.HANDSHAKE,
 
 
 def get_bitstring(hive_type=HiveMessageType.BUS, payload=None,
-                  compressed=False, hivemeta=None,
+                  compressed=None, hivemeta=None,
                   binary_type=HiveMindBinaryPayloadType.UNDEFINED,
                   proto_version=PROTOCOL_VERSION, versioned=False):
     if proto_version <= 1:
-        return _get_bitstring_v1(hive_type, payload, compressed, hivemeta, binary_type, versioned)
+        if compressed is None:  # auto
+            unc = _get_bitstring_v1(hive_type, payload, False, hivemeta, binary_type, versioned)
+            comp = _get_bitstring_v1(hive_type, payload, True, hivemeta, binary_type, versioned)
+            if len(unc) <= len(comp):
+                return unc
+            return comp
+        return _get_bitstring_v1(hive_type, payload, bool(compressed), hivemeta, binary_type, versioned)
     raise UnsupportedProtocolVersion(f"Max Supported Version: {PROTOCOL_VERSION}")
 
 
 def _get_bitstring_v1(hive_type=HiveMessageType.BUS, payload=None,
-                      compressed=False, hivemeta=None,
+                      compressed=True, hivemeta=None,
                       binary_type=HiveMindBinaryPayloadType.UNDEFINED, versioned=False):
     # there are 12 hivemind message main types
     typemap = {v: k for k, v in _INT2TYPE.items()}
