@@ -81,7 +81,8 @@ class HivePayloadWaiter(HiveMessageWaiter):
 
 class HiveMessageBusClient(OVOSBusClient):
     def __init__(self, key, password=None, crypto_key=None, host='127.0.0.1', port=5678,
-                 useragent="HiveMessageBusClientV0.0.1", self_signed=True, share_bus=False):
+                 useragent="HiveMessageBusClientV0.0.1", self_signed=True, share_bus=False,
+                 compress=True, binarize=True):
         ssl = host.startswith("wss://")
         host = host.replace("ws://", "").replace("wss://", "").strip()
         self.key = key
@@ -93,6 +94,11 @@ class HiveMessageBusClient(OVOSBusClient):
         self.password = password
         self.share_bus = share_bus
         self.handshake_event = Event()
+
+        # if you want to reduce CPU usage in exchange for more bandwidth set below to False
+        self.compress = compress  # None -> auto
+        self.binarize = binarize  # only if hivemind reports also supporting it
+
         super().__init__(host=host, port=port, ssl=ssl, emitter=EventEmitter())
 
     def connect(self, bus=FakeBus()):
@@ -197,11 +203,12 @@ class HiveMessageBusClient(OVOSBusClient):
             if message.msg_type == HiveMessageType.BINARY:
                 binarize = True
             elif message.msg_type not in [HiveMessageType.HELLO, HiveMessageType.HANDSHAKE]:
-                binarize = self.protocol.binarize
+                binarize = self.protocol.binarize and self.binarize
 
             if binarize:
                 bitstr = get_bitstring(hive_type=message.msg_type,
-                                       payload=message.payload)
+                                       payload=message.payload,
+                                       compressed=self.compress)
                 if self.crypto_key:
                     ws_payload = encrypt_bin(self.crypto_key, bitstr.bytes)
                 else:
