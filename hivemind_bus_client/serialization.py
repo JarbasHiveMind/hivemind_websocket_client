@@ -48,11 +48,12 @@ def get_bitstring(hive_type=HiveMessageType.BUS, payload=None,
 def _get_bitstring_v1(hive_type=HiveMessageType.BUS, payload=None,
                       compressed=False, hivemeta=None,
                       binary_type=HiveMindBinaryPayloadType.UNDEFINED, versioned=False):
-    # there are 13 hivemind message main types
+    # there are 12 hivemind message main types
     typemap = {v: k for k, v in _INT2TYPE.items()}
     binmap = {e: e.value for e in HiveMindBinaryPayloadType}
 
     s = BitArray()
+    s.append(f'uint:1={int(1)}')  # always start with a 1, 0s to the left for padding so it can be cast to bytes
     s.append(f'uint:1={int(versioned)}')  # 1 bit unsigned integer - requires protocol version
     if versioned:
         s.append(f'uint:8={PROTOCOL_VERSION}')
@@ -75,11 +76,19 @@ def _get_bitstring_v1(hive_type=HiveMessageType.BUS, payload=None,
         payload = cast2bytes(payload, compressed)
 
     s.append(payload)
+
+    # pad
+    while len(s) % 8 != 0:
+        s.insert(f'uint:1={int(0)}', 0)
+
     return s
 
 
 def decode_bitstring(bitstr):
     s = BitStream(bitstr)
+    pad = False
+    while not pad:
+        pad = s.read(1).bool
     versioned = s.read(1).bool
     if versioned:
         proto_version = s.read(8).uint

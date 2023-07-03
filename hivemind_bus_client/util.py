@@ -3,7 +3,7 @@ import zlib
 from binascii import hexlify
 from binascii import unhexlify
 
-from ovos_utils.security import encrypt, decrypt
+from ovos_utils.security import encrypt, decrypt, AES
 
 from hivemind_bus_client.exceptions import EncryptionKeyError, DecryptionKeyError
 from hivemind_bus_client.message import HiveMessage, HiveMessageType, Message
@@ -148,7 +148,10 @@ def decrypt_bin(key, ciphertext):
     nonce, ciphertext, tag = ciphertext[:16], ciphertext[16:-16], ciphertext[-16:]
 
     try:
-        return decrypt(key, ciphertext, tag, nonce)
+        if not isinstance(key, bytes):
+            key = bytes(key, encoding="utf-8")
+        cipher = AES.new(key, AES.MODE_GCM, nonce)
+        return cipher.decrypt_and_verify(ciphertext, tag)
     except ValueError:
         raise DecryptionKeyError
 
