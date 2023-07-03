@@ -1,8 +1,12 @@
 import json
-from ovos_utils.security import encrypt, decrypt
-from binascii import hexlify, unhexlify
-from hivemind_bus_client.message import HiveMessage, HiveMessageType, Message
+import zlib
+from binascii import hexlify
+from binascii import unhexlify
+
+from ovos_utils.security import encrypt, decrypt, AES
+
 from hivemind_bus_client.exceptions import EncryptionKeyError, DecryptionKeyError
+from hivemind_bus_client.message import HiveMessage, HiveMessageType, Message
 
 
 def serialize_message(message):
@@ -97,15 +101,13 @@ def get_mycroft_msg(pload):
     return pload
 
 
-def encrypt_as_json(key, data, nonce=None):
+def encrypt_as_json(key, data):
     if isinstance(data, dict):
         data = json.dumps(data)
     if len(key) > 16:
         key = key[0:16]
-    try:
-        ciphertext, tag, nonce = encrypt(key, data, nonce=nonce)
-    except:
-        raise EncryptionKeyError
+    ciphertext = encrypt_bin(key, data)
+    nonce, ciphertext, tag = ciphertext[:16], ciphertext[16:-16], ciphertext[-16:]
     return json.dumps({"ciphertext": hexlify(ciphertext).decode('utf-8'),
                        "tag": hexlify(tag).decode('utf-8'),
                        "nonce": hexlify(nonce).decode('utf-8')})
@@ -126,3 +128,64 @@ def decrypt_from_json(key, data):
         return decrypt(key, ciphertext, tag, nonce)
     except ValueError:
         raise DecryptionKeyError
+
+
+def encrypt_bin(key, data):
+    if len(key) > 16:
+        key = key[0:16]
+    try:
+        ciphertext, tag, nonce = encrypt(key, data)
+    except:
+        raise EncryptionKeyError
+
+    return nonce + ciphertext + tag
+
+
+def decrypt_bin(key, ciphertext):
+    if len(key) > 16:
+        key = key[0:16]
+
+    nonce, ciphertext, tag = ciphertext[:16], ciphertext[16:-16], ciphertext[-16:]
+
+    try:
+        if not isinstance(key, bytes):
+            key = bytes(key, encoding="utf-8")
+        cipher = AES.new(key, AES.MODE_GCM, nonce)
+        return cipher.decrypt_and_verify(ciphertext, tag)
+    except ValueError:
+        raise DecryptionKeyError
+
+
+def compress_payload(text):
+    # Compressing text
+    if isinstance(text, str):
+        decompressed = text.encode("utf-8")
+    else:
+        decompressed = text
+    return zlib.compress(decompressed)
+
+
+def decompress_payload(compressed):
+    # Decompressing text
+    if isinstance(compressed, str):
+        # assume hex
+        compressed = unhexlify(compressed)
+    return zlib.decompress(compressed)
+
+
+def cast2bytes(payload, compressed=False):
+    if isinstance(payload, dict):
+        payload = json.dumps(payload)
+    if compressed:
+        payload = compress_payload(payload)
+    if isinstance(payload, str):
+        payload = payload.encode("utf-8")
+    assert isinstance(payload, bytes)
+    return payload
+
+
+def bytes2str(payload, compressed=False):
+    if compressed:
+        return decompress_payload(payload).decode("utf-8")
+    else:
+        return payload.decode("utf-8")

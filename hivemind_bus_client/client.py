@@ -8,11 +8,13 @@ from ovos_bus_client import Message as MycroftMessage, MessageBusClient as OVOSB
 from ovos_utils.log import LOG
 from ovos_utils.messagebus import FakeBus
 from pyee import EventEmitter
+from websocket import ABNF
 from websocket import WebSocketApp, WebSocketConnectionClosedException
 
 from hivemind_bus_client.message import HiveMessage, HiveMessageType
+from hivemind_bus_client.serialization import get_bitstring, decode_bitstring
 from hivemind_bus_client.util import serialize_message, \
-    encrypt_as_json, decrypt_from_json
+    encrypt_as_json, decrypt_from_json, encrypt_bin, decrypt_bin
 
 
 class HiveMessageWaiter:
@@ -79,7 +81,8 @@ class HivePayloadWaiter(HiveMessageWaiter):
 
 class HiveMessageBusClient(OVOSBusClient):
     def __init__(self, key, password=None, crypto_key=None, host='127.0.0.1', port=5678,
-                 useragent="HiveMessageBusClientV0.0.1", self_signed=True, share_bus=False):
+                 useragent="HiveMessageBusClientV0.0.1", self_signed=True, share_bus=False,
+                 compress=True, binarize=True):
         ssl = host.startswith("wss://")
         host = host.replace("ws://", "").replace("wss://", "").strip()
         self.key = key
@@ -91,6 +94,11 @@ class HiveMessageBusClient(OVOSBusClient):
         self.password = password
         self.share_bus = share_bus
         self.handshake_event = Event()
+
+        # if you want to reduce CPU usage in exchange for more bandwidth set below to False
+        self.compress = compress  # None -> auto
+        self.binarize = binarize  # only if hivemind reports also supporting it
+
         super().__init__(host=host, port=port, ssl=ssl, emitter=EventEmitter())
 
     def connect(self, bus=FakeBus()):
@@ -141,12 +149,19 @@ class HiveMessageBusClient(OVOSBusClient):
         else:
             message = args[1]
         if self.crypto_key:
-            if "ciphertext" in message:
-                #LOG.info(f"got encrypted message: {len(message)}")
+            # handle binary encryption
+            if isinstance(message, bytes):
+                message = decrypt_bin(self.crypto_key, message)
+            # handle json encryption
+            elif "ciphertext" in message:
+                # LOG.debug(f"got encrypted message: {len(message)}")
                 message = decrypt_from_json(self.crypto_key, message)
             else:
-                LOG.warning("Message was unencrypted")
-        if isinstance(message, str):
+                LOG.info("Message was unencrypted")
+
+        if isinstance(message, bytes):
+            message = decode_bitstring(message)
+        elif isinstance(message, str):
             message = json.loads(message)
         self.emitter.emit('message', message)  # raw message
         self._handle_hive_protocol(HiveMessage(**message))
@@ -182,13 +197,29 @@ class HiveMessageBusClient(OVOSBusClient):
                 if "destination" not in message.payload.context:
                     ctxt["destination"] = "HiveMind"
                 message.payload.context = ctxt
-            payload = serialize_message(message)
-            LOG.info(f"sending to HiveMind: {payload}")
-            if self.crypto_key:
-                payload = encrypt_as_json(self.crypto_key, payload)
-                # LOG.info(f"encrypted size: {len(payload)}")
 
-            self.client.send(payload)
+            LOG.debug(f"sending to HiveMind: {message.msg_type}")
+            binarize = False
+            if message.msg_type == HiveMessageType.BINARY:
+                binarize = True
+            elif message.msg_type not in [HiveMessageType.HELLO, HiveMessageType.HANDSHAKE]:
+                binarize = self.protocol.binarize and self.binarize
+
+            if binarize:
+                bitstr = get_bitstring(hive_type=message.msg_type,
+                                       payload=message.payload,
+                                       compressed=self.compress)
+                if self.crypto_key:
+                    ws_payload = encrypt_bin(self.crypto_key, bitstr.bytes)
+                else:
+                    ws_payload = bitstr.bytes
+                self.client.send(ws_payload, ABNF.OPCODE_BINARY)
+            else:
+                ws_payload = serialize_message(message)
+                if self.crypto_key:
+                    ws_payload = encrypt_as_json(self.crypto_key, ws_payload)
+                self.client.send(ws_payload)
+
         except WebSocketConnectionClosedException:
             LOG.warning(f'Could not send {message.msg_type} message because connection '
                         'has been closed')
@@ -261,7 +292,7 @@ class HiveMessageBusClient(OVOSBusClient):
         return HivePayloadWaiter(bus=self, payload_type=payload_type,
                                  message_type=message_type).wait(timeout)
 
-    def wait_for_mycroft(self, mycroft_msg_type: str, timeout: float=3.0):
+    def wait_for_mycroft(self, mycroft_msg_type: str, timeout: float = 3.0):
         return self.wait_for_payload(mycroft_msg_type, timeout=timeout,
                                      message_type=HiveMessageType.BUS)
 

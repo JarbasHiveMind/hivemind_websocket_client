@@ -84,6 +84,7 @@ class HiveMindSlaveProtocol:
     internal_protocol: HiveMindSlaveInternalProtocol = None
     mpubkey: str = ""  # asc public PGP key from master
     shared_bus: bool = False
+    binarize: bool = False
 
     def bind(self, bus: Optional[MessageBusClient] = None):
         if bus is None:
@@ -160,11 +161,18 @@ class HiveMindSlaveProtocol:
             if self.identity.password:
                 self.pswd_handshake = PasswordHandShake(self.identity.password)
 
+            self.binarize = message.payload.get("binarize", False)
+            if self.binarize:
+                LOG.info("hivemind supports binarization protocol")
+            else:
+                LOG.info("hivemind does not support binarization protocol")
             if message.payload["password"] and self.pswd_handshake is not None:
                 envelope = self.pswd_handshake.generate_handshake()
-                msg = HiveMessage(HiveMessageType.HANDSHAKE, {"envelope": envelope})
+                msg = HiveMessage(HiveMessageType.HANDSHAKE, {"envelope": envelope,
+                                                              "binarize": self.binarize})
             else:
-                msg = HiveMessage(HiveMessageType.HANDSHAKE, {"pubkey": self.handshake.pubkey})
+                msg = HiveMessage(HiveMessageType.HANDSHAKE, {"pubkey": self.handshake.pubkey,
+                                                              "binarize": self.binarize})
             self.hm.emit(msg)
 
     def handle_bus(self, message: HiveMessage):

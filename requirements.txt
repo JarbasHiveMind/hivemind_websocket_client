@@ -1,3 +1,4 @@
 ovos-bus-client
 ovos_utils
 pycryptodomex
+bitstring
