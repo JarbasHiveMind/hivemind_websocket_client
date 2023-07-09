@@ -132,53 +132,61 @@ class HiveMindSlaveProtocol:
             self.internal_protocol.node_id = node_id
             LOG.info(f"Connected to HiveMind: {node_id}")
 
+    def start_handshake(self,):
+        if self.binarize:
+            LOG.info("hivemind supports binarization protocol")
+        else:
+            LOG.info("hivemind does not support binarization protocol")
+
+        if self.pswd_handshake is not None:
+            envelope = self.pswd_handshake.generate_handshake()
+            msg = HiveMessage(HiveMessageType.HANDSHAKE, {"envelope": envelope,
+                                                          "binarize": self.binarize})
+        else:
+            msg = HiveMessage(HiveMessageType.HANDSHAKE, {"pubkey": self.handshake.pubkey,
+                                                          "binarize": self.binarize})
+        self.hm.emit(msg)
+
+    def receive_handshake(self, envelope):
+        if self.pswd_handshake is not None:
+            LOG.info("Received password envelope")
+            self.pswd_handshake.receive_and_verify(envelope)  # validate master password matched
+            self.hm.crypto_key = self.pswd_handshake.secret  # update to new crypto key
+        else:
+            LOG.info("Received pubkey envelope")
+            # if we have a pubkey let's verify the master node is who it claims to be
+            # currently this is sent in HELLO, but advance use cases can read it from somewhere else
+            if self.mpubkey:
+                # authenticates the server to the client
+                self.handshake.receive_and_verify(envelope, self.mpubkey)
+            else:
+                # implicitly trust the server
+                self.handshake.receive_handshake(envelope)
+            self.hm.crypto_key = self.handshake.secret  # update to new crypto key
+        self.hm.handshake_event.set()
+
     def handle_handshake(self, message: HiveMessage):
         LOG.info(f"HANDSHAKE: {message.payload}")
         # master is performing the handshake
         if "envelope" in message.payload:
             envelope = message.payload["envelope"]
-            if self.pswd_handshake is not None:
-                LOG.info("Received password envelope")
-                self.pswd_handshake.receive_and_verify(envelope)  # validate master password matched
-                self.hm.crypto_key = self.pswd_handshake.secret  # update to new crypto key
-            else:
-                LOG.info("Received pubkey envelope")
-                # if we have a pubkey let's verify the master node is who it claims to be
-                # currently this is sent in HELLO, but advance use cases can read it from somewhere else
-                if self.mpubkey:
-                    # authenticates the server to the client
-                    self.handshake.receive_and_verify(envelope, self.mpubkey)
-                else:
-                    # implicitly trust the server
-                    self.handshake.receive_handshake(envelope)
-                self.hm.crypto_key = self.handshake.secret  # update to new crypto key
-            self.hm.handshake_event.set()
+            self.receive_handshake(envelope)
+
         # master is requesting handshake start
         else:
             required = message.payload["handshake"]
-
             if not required and message.payload.get("crypto_key") and self.hm.crypto_key:
                 pass  # we can use the pre-shared key and ignore this message
                 # TODO - flag to give preference to pre-shared key
 
             # TODO - flag to give preference to / require password or not
             # currently if password is set then it is always used
-            if self.identity.password:
+            if message.payload.get("password", True) and self.identity.password:
                 self.pswd_handshake = PasswordHandShake(self.identity.password)
 
             self.binarize = message.payload.get("binarize", False)
-            if self.binarize:
-                LOG.info("hivemind supports binarization protocol")
-            else:
-                LOG.info("hivemind does not support binarization protocol")
-            if message.payload["password"] and self.pswd_handshake is not None:
-                envelope = self.pswd_handshake.generate_handshake()
-                msg = HiveMessage(HiveMessageType.HANDSHAKE, {"envelope": envelope,
-                                                              "binarize": self.binarize})
-            else:
-                msg = HiveMessage(HiveMessageType.HANDSHAKE, {"pubkey": self.handshake.pubkey,
-                                                              "binarize": self.binarize})
-            self.hm.emit(msg)
+
+            self.start_handshake()
 
     def handle_bus(self, message: HiveMessage):
         LOG.info(f"BUS: {message.payload.msg_type}")

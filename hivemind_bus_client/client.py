@@ -113,7 +113,23 @@ class HiveMessageBusClient(OVOSBusClient):
         LOG.info("Connecting to Hivemind")
         self.run_in_thread()
         self.protocol.bind(bus)
-        self.handshake_event.wait()
+        self.wait_for_handshake()
+
+    def on_error(self, *args):
+        self.handshake_event.clear()
+        self.crypto_key = None
+        super().on_error(*args)
+
+    def on_close(self, *args):
+        self.handshake_event.clear()
+        self.crypto_key = None
+        super().on_close(*args)
+
+    def wait_for_handshake(self, timeout=5):
+        self.handshake_event.wait(timeout=timeout)
+        if not self.handshake_event.is_set():
+            self.protocol.start_handshake()
+            self.wait_for_handshake()
 
     @staticmethod
     def build_url(key, host='127.0.0.1', port=5678,
