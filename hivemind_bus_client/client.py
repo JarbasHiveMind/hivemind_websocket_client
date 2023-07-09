@@ -101,10 +101,10 @@ class HiveMessageBusClient(OVOSBusClient):
 
         super().__init__(host=host, port=port, ssl=ssl, emitter=EventEmitter())
 
-    def connect(self, bus=FakeBus()):
+    def connect(self, bus=FakeBus(), identity=None):
         from hivemind_bus_client.protocol import HiveMindSlaveProtocol
         from hivemind_bus_client.identity import NodeIdentity
-        ident = NodeIdentity()
+        ident = identity or NodeIdentity()
         ident.password = self.password or ident.password
         LOG.info("Initializing HiveMindSlaveProtocol")
         self.protocol = HiveMindSlaveProtocol(self,
