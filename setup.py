@@ -17,7 +17,7 @@ def required(requirements_file):
 
 setup(
     name='hivemind_bus_client',
-    version='0.0.3',
+    version='0.0.4a1',
     packages=['hivemind_bus_client'],
     package_data={
       '*': ['*.txt', '*.md']
