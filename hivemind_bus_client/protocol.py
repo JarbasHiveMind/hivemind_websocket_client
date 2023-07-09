@@ -78,15 +78,20 @@ class HiveMindSlaveProtocol:
     Master becomes able to inject arbitrary bus messages
     """
     hm: HiveMessageBusClient
-    identity: NodeIdentity = NodeIdentity()
-    handshake: HandShake = HandShake(identity.private_key)
-    pswd_handshake: Optional[PasswordHandShake] = PasswordHandShake(identity.password) if identity.password else None
+    identity: Optional[NodeIdentity] = None
+    handshake: Optional[HandShake] = None
+    pswd_handshake: Optional[PasswordHandShake] = None
     internal_protocol: HiveMindSlaveInternalProtocol = None
     mpubkey: str = ""  # asc public PGP key from master
     shared_bus: bool = False
     binarize: bool = False
 
     def bind(self, bus: Optional[MessageBusClient] = None):
+        if self.identity is None:
+            self.identity = NodeIdentity()
+        self.handshake = HandShake(self.identity.private_key)
+        self.pswd_handshake = PasswordHandShake(self.identity.password) if self.identity.password else None
+
         if bus is None:
             bus = MessageBusClient()
             bus.run_in_thread()
