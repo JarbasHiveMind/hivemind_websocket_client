@@ -10,7 +10,7 @@ with open("README.md", "r") as fh:
 def get_version():
     """ Find the version of the package"""
     version = None
-    version_file = os.path.join(BASEDIR, 'hivemind_core', 'version.py')
+    version_file = os.path.join(BASEDIR, 'hivemind_bus_client', 'version.py')
     major, minor, build, alpha = (None, None, None, None)
     with open(version_file) as f:
         for line in f:
