@@ -174,19 +174,23 @@ class HiveMindSlaveProtocol:
 
         # master is requesting handshake start
         else:
-            required = message.payload["handshake"]
-            if not required and message.payload.get("crypto_key") and self.hm.crypto_key:
-                pass  # we can use the pre-shared key and ignore this message
-                # TODO - flag to give preference to pre-shared key
+            supported = message.payload.get("handshake")
 
-            # TODO - flag to give preference to / require password or not
-            # currently if password is set then it is always used
-            if message.payload.get("password", True) and self.identity.password:
-                self.pswd_handshake = PasswordHandShake(self.identity.password)
+            if not supported:
+                self.hm.handshake_event.set()  # don't wait
+                return
+
+            if message.payload.get("crypto_key") and self.hm.crypto_key:
+                pass
+                # we can use the pre-shared key instead of handshake
+                # TODO - flag to give preference to pre-shared key over handshake
 
             self.binarize = message.payload.get("binarize", False)
-
-            self.start_handshake()
+            # TODO - flag to give preference to / require password or not
+            # currently if password is set then it is always used
+            if message.payload.get("password") and self.identity.password:
+                self.pswd_handshake = PasswordHandShake(self.identity.password)
+                self.start_handshake()
 
     def handle_bus(self, message: HiveMessage):
         LOG.info(f"BUS: {message.payload.msg_type}")
