@@ -1,8 +1,8 @@
 # Changelog
 
-## [Unreleased](https://github.com/JarbasHiveMind/hivemind_websocket_client/tree/HEAD)
+## [V0.0.4a4](https://github.com/JarbasHiveMind/hivemind_websocket_client/tree/V0.0.4a4) (2023-08-03)
 
-[Full Changelog](https://github.com/JarbasHiveMind/hivemind_websocket_client/compare/0.0.1...HEAD)
+[Full Changelog](https://github.com/JarbasHiveMind/hivemind_websocket_client/compare/0.0.1...V0.0.4a4)
 
 **Implemented enhancements:**
 
