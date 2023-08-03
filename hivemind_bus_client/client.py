@@ -101,15 +101,18 @@ class HiveMessageBusClient(OVOSBusClient):
 
         super().__init__(host=host, port=port, ssl=ssl, emitter=EventEmitter())
 
-    def connect(self, bus=FakeBus(), identity=None):
+    def connect(self, bus=FakeBus(), identity=None, protocol=None):
         from hivemind_bus_client.protocol import HiveMindSlaveProtocol
         from hivemind_bus_client.identity import NodeIdentity
         ident = identity or NodeIdentity()
         ident.password = self.password or ident.password
-        LOG.info("Initializing HiveMindSlaveProtocol")
-        self.protocol = HiveMindSlaveProtocol(self,
-                                              shared_bus=self.share_bus,
-                                              identity=ident)
+        if protocol is None:
+            LOG.debug("Initializing HiveMindSlaveProtocol")
+            self.protocol = HiveMindSlaveProtocol(self,
+                                                  shared_bus=self.share_bus,
+                                                  identity=ident)
+        else:
+            self.protocol = protocol
         LOG.info("Connecting to Hivemind")
         self.run_in_thread()
         self.protocol.bind(bus)
@@ -173,7 +176,7 @@ class HiveMessageBusClient(OVOSBusClient):
                 # LOG.debug(f"got encrypted message: {len(message)}")
                 message = decrypt_from_json(self.crypto_key, message)
             else:
-                LOG.info("Message was unencrypted")
+                LOG.debug("Message was unencrypted")
 
         if isinstance(message, bytes):
             message = decode_bitstring(message)
@@ -259,7 +262,7 @@ class HiveMessageBusClient(OVOSBusClient):
         self.emit(message)
 
     def on_mycroft(self, mycroft_msg_type, func):
-        LOG.info(f"registering mycroft event: {mycroft_msg_type}")
+        LOG.debug(f"registering mycroft event: {mycroft_msg_type}")
         self._mycroft_events[mycroft_msg_type] = self._mycroft_events.get(mycroft_msg_type) or []
         self._mycroft_events[mycroft_msg_type].append(func)
 
@@ -270,11 +273,11 @@ class HiveMessageBusClient(OVOSBusClient):
             # this could be done better,
             # but makes this lib almost a drop in replacement
             # for the mycroft bus client
-            LOG.info(f"registering mycroft handler: {event_name}")
+            #LOG.info(f"registering mycroft handler: {event_name}")
             self.on_mycroft(event_name, func)
         else:
             # hivemind message
-            LOG.info(f"registering handler: {event_name}")
+            LOG.debug(f"registering handler: {event_name}")
             self.emitter.on(event_name, func)
 
     # utility
