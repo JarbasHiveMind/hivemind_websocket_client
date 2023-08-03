@@ -1,9 +1,35 @@
 import os
 from setuptools import setup
 
+BASEDIR = os.path.abspath(os.path.dirname(__file__))
 
 with open("README.md", "r") as fh:
     long_desc = fh.read()
+
+
+def get_version():
+    """ Find the version of the package"""
+    version = None
+    version_file = os.path.join(BASEDIR, 'hivemind_core', 'version.py')
+    major, minor, build, alpha = (None, None, None, None)
+    with open(version_file) as f:
+        for line in f:
+            if 'VERSION_MAJOR' in line:
+                major = line.split('=')[1].strip()
+            elif 'VERSION_MINOR' in line:
+                minor = line.split('=')[1].strip()
+            elif 'VERSION_BUILD' in line:
+                build = line.split('=')[1].strip()
+            elif 'VERSION_ALPHA' in line:
+                alpha = line.split('=')[1].strip()
+
+            if ((major and minor and build and alpha) or
+                    '# END_VERSION_BLOCK' in line):
+                break
+    version = f"{major}.{minor}.{build}"
+    if alpha:
+        version += f"a{alpha}"
+    return version
 
 
 def required(requirements_file):
@@ -17,7 +43,7 @@ def required(requirements_file):
 
 setup(
     name='hivemind_bus_client',
-    version='0.0.4a3',
+    version=get_version(),
     packages=['hivemind_bus_client'],
     package_data={
       '*': ['*.txt', '*.md']
