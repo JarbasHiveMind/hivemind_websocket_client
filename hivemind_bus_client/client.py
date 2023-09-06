@@ -182,6 +182,8 @@ class HiveMessageBusClient(OVOSBusClient):
             message = decode_bitstring(message)
         elif isinstance(message, str):
             message = json.loads(message)
+        if "ciphertext" in message:
+            raise RuntimeError("got encrypted message, but could not decrypt!")
         self.emitter.emit('message', message)  # raw message
         self._handle_hive_protocol(HiveMessage(**message))
 

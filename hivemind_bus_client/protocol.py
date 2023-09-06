@@ -174,11 +174,10 @@ class HiveMindSlaveProtocol:
 
         # master is requesting handshake start
         else:
-            supported = message.payload.get("handshake")
-
-            if not supported:
-                self.hm.handshake_event.set()  # don't wait
-                return
+            #required = message.payload.get("handshake")
+            #if not required:
+            #    self.hm.handshake_event.set()  # don't wait
+            #    return
 
             if message.payload.get("crypto_key") and self.hm.crypto_key:
                 pass
