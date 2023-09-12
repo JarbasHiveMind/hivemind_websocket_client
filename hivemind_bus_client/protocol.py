@@ -85,6 +85,7 @@ class HiveMindSlaveProtocol:
     mpubkey: str = ""  # asc public PGP key from master
     shared_bus: bool = False
     binarize: bool = False
+    site_id: str = "unknown"
 
     def bind(self, bus: Optional[MessageBusClient] = None):
         if self.identity is None:
@@ -141,10 +142,12 @@ class HiveMindSlaveProtocol:
         if self.pswd_handshake is not None:
             envelope = self.pswd_handshake.generate_handshake()
             msg = HiveMessage(HiveMessageType.HANDSHAKE, {"envelope": envelope,
-                                                          "binarize": self.binarize})
+                                                          "binarize": self.binarize,
+                                                          "site_id": self.site_id})
         else:
             msg = HiveMessage(HiveMessageType.HANDSHAKE, {"pubkey": self.handshake.pubkey,
-                                                          "binarize": self.binarize})
+                                                          "binarize": self.binarize,
+                                                          "site_id": self.site_id})
         self.hm.emit(msg)
 
     def receive_handshake(self, envelope):
