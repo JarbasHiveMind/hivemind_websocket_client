@@ -101,7 +101,7 @@ class HiveMessageBusClient(OVOSBusClient):
 
         super().__init__(host=host, port=port, ssl=ssl, emitter=EventEmitter())
 
-    def connect(self, bus=FakeBus(), identity=None, protocol=None):
+    def connect(self, bus=FakeBus(), identity=None, protocol=None, site_id=None):
         from hivemind_bus_client.protocol import HiveMindSlaveProtocol
         from hivemind_bus_client.identity import NodeIdentity
         ident = identity or NodeIdentity()
@@ -110,9 +110,13 @@ class HiveMessageBusClient(OVOSBusClient):
             LOG.debug("Initializing HiveMindSlaveProtocol")
             self.protocol = HiveMindSlaveProtocol(self,
                                                   shared_bus=self.share_bus,
+                                                  site_id=site_id or "unknown",
                                                   identity=ident)
         else:
             self.protocol = protocol
+            if site_id is not None:
+                self.protocol.site_id = site_id
+
         LOG.info("Connecting to Hivemind")
         self.run_in_thread()
         self.protocol.bind(bus)
