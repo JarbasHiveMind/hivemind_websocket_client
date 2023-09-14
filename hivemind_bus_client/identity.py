@@ -44,6 +44,22 @@ class NodeIdentity:
     def password(self, val):
         self.IDENTITY_FILE["password"] = val
 
+    @property
+    def access_key(self):
+        return self.IDENTITY_FILE.get("access_key")
+
+    @access_key.setter
+    def access_key(self, val):
+        self.IDENTITY_FILE["access_key"] = val
+
+    @property
+    def site_id(self):
+        return self.IDENTITY_FILE.get("site_id")
+
+    @site_id.setter
+    def site_id(self, val):
+        self.IDENTITY_FILE["site_id"] = val
+
     def save(self):
         self.IDENTITY_FILE.store()
 
