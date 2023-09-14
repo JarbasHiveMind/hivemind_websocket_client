@@ -11,6 +11,7 @@ from pyee import EventEmitter
 from websocket import ABNF
 from websocket import WebSocketApp, WebSocketConnectionClosedException
 
+from hivemind_bus_client.identity import NodeIdentity
 from hivemind_bus_client.message import HiveMessage, HiveMessageType
 from hivemind_bus_client.serialization import get_bitstring, decode_bitstring
 from hivemind_bus_client.util import serialize_message, \
@@ -80,18 +81,20 @@ class HivePayloadWaiter(HiveMessageWaiter):
 
 
 class HiveMessageBusClient(OVOSBusClient):
-    def __init__(self, key, password=None, crypto_key=None, host='127.0.0.1', port=5678,
+    def __init__(self, key=None, password=None, crypto_key=None, host='127.0.0.1', port=5678,
                  useragent="HiveMessageBusClientV0.0.1", self_signed=True, share_bus=False,
                  compress=True, binarize=True):
         ssl = host.startswith("wss://")
         host = host.replace("ws://", "").replace("wss://", "").strip()
-        self.key = key
-        self.useragent = useragent
+
+        self.identity = NodeIdentity()
+        self.identity.password = password or self.identity.password
+        self.identity.access_key = key or self.identity.access_key
+        self.identity.name = useragent or self.identity.name
+
         self.crypto_key = crypto_key
-        self.password = password
         self.allow_self_signed = self_signed
         self._mycroft_events = {}  # msg_type: [handler]
-        self.password = password
         self.share_bus = share_bus
         self.handshake_event = Event()
 
@@ -101,19 +104,52 @@ class HiveMessageBusClient(OVOSBusClient):
 
         super().__init__(host=host, port=port, ssl=ssl, emitter=EventEmitter())
 
+    @property
+    def useragent(self):
+        return self.identity.name
+
+    @useragent.setter
+    def useragent(self, val):
+        self.identity.name = val
+
+    @property
+    def password(self):
+        return self.identity.password
+
+    @property
+    def key(self):
+        return self.identity.access_key
+
+    @property
+    def site_id(self):
+        return self.identity.site_id
+
+    @site_id.setter
+    def site_id(self, val):
+        self.identity.site_id = val
+
+    @password.setter
+    def password(self, val):
+        self.identity.password = val
+
+    @key.setter
+    def key(self, val):
+        self.identity.access_key = val
+
     def connect(self, bus=FakeBus(), identity=None, protocol=None, site_id=None):
         from hivemind_bus_client.protocol import HiveMindSlaveProtocol
-        from hivemind_bus_client.identity import NodeIdentity
-        ident = identity or NodeIdentity()
-        ident.password = self.password or ident.password
+
+        self.identity = identity or self.identity
+        self.identity.site_id = site_id or self.identity.site_id
         if protocol is None:
             LOG.debug("Initializing HiveMindSlaveProtocol")
             self.protocol = HiveMindSlaveProtocol(self,
                                                   shared_bus=self.share_bus,
                                                   site_id=site_id or "unknown",
-                                                  identity=ident)
+                                                  identity=self.identity)
         else:
             self.protocol = protocol
+            self.protocol.identity = self.identity
             if site_id is not None:
                 self.protocol.site_id = site_id
 
@@ -279,7 +315,7 @@ class HiveMessageBusClient(OVOSBusClient):
             # this could be done better,
             # but makes this lib almost a drop in replacement
             # for the mycroft bus client
-            #LOG.info(f"registering mycroft handler: {event_name}")
+            # LOG.info(f"registering mycroft handler: {event_name}")
             self.on_mycroft(event_name, func)
         else:
             # hivemind message

@@ -7,7 +7,7 @@ from ovos_utils.messagebus import FakeBus
 
 from hivemind_bus_client.client import HiveMessageBusClient
 from hivemind_bus_client.message import HiveMessage, HiveMessageType
-
+from hivemind_bus_client.identity import NodeIdentity
 LOG.set_level("DEBUG")
 
 
@@ -16,14 +16,32 @@ def hmclient_cmds():
     pass
 
 
+@hmclient_cmds.command(help="persist node identity / credentials", name="set-identity")
+@click.option("--key", help="HiveMind access key", type=str, default="")
+@click.option("--password", help="HiveMind password", type=str, default="")
+@click.option("--siteid", help="location identifier for message.context", type=str, default="")
+def identity_set(key: str, password: str, siteid: str):
+    identity = NodeIdentity()
+    identity.password = password or identity.password
+    identity.access_key = key or identity.access_key
+    identity.site_id = siteid or identity.site_id
+    identity.save()
+
+
 @hmclient_cmds.command(help="simple cli interface to inject utterances and print speech", name="terminal")
-@click.option("--key", help="HiveMind access key", type=str)
-@click.option("--password", help="HiveMind password", type=str)
+@click.option("--key", help="HiveMind access key", type=str, default="")
+@click.option("--password", help="HiveMind password", type=str, default="")
 @click.option("--host", help="HiveMind host", type=str, default="0.0.0.0")
 @click.option("--port", help="HiveMind port number", type=int, default=5678)
-def terminal(key: str, password: str, host: str, port: int):
+@click.option("--siteid", help="location identifier for message.context", type=str, default="")
+def terminal(key: str, password: str, host: str, port: int, siteid: str):
+    if not password or not key or not siteid:
+        identity = NodeIdentity()
+        password = password or identity.password
+        key = key or identity.access_key
+        siteid = siteid or identity.site_id or "unknown"
     node = HiveMessageBusClient(key, host=host, port=port, password=password)
-    node.connect(FakeBus())
+    node.connect(FakeBus(), site_id=siteid)
 
     # node.connected_event.wait()
     print("== connected to HiveMind")
