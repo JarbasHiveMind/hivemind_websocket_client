@@ -2,7 +2,15 @@
 
 ## [Unreleased](https://github.com/JarbasHiveMind/hivemind_websocket_client/tree/HEAD)
 
-[Full Changelog](https://github.com/JarbasHiveMind/hivemind_websocket_client/compare/V0.0.4a8...HEAD)
+[Full Changelog](https://github.com/JarbasHiveMind/hivemind_websocket_client/compare/V0.0.4a9...HEAD)
+
+**Implemented enhancements:**
+
+- feat/identity\_file host [\#19](https://github.com/JarbasHiveMind/hivemind_websocket_client/pull/19) ([JarbasAl](https://github.com/JarbasAl))
+
+## [V0.0.4a9](https://github.com/JarbasHiveMind/hivemind_websocket_client/tree/V0.0.4a9) (2023-09-14)
+
+[Full Changelog](https://github.com/JarbasHiveMind/hivemind_websocket_client/compare/V0.0.4a8...V0.0.4a9)
 
 **Implemented enhancements:**
 
