@@ -19,14 +19,19 @@ def hmclient_cmds():
 @hmclient_cmds.command(help="persist node identity / credentials", name="set-identity")
 @click.option("--key", help="HiveMind access key", type=str, default="")
 @click.option("--password", help="HiveMind password", type=str, default="")
+@click.option("--host", help="default host for hivemind-core", type=str, default="")
 @click.option("--siteid", help="location identifier for message.context", type=str, default="")
-def identity_set(key: str, password: str, siteid: str):
+def identity_set(key: str, password: str, host: str, siteid: str):
     if not key and not password and not siteid:
-        raise ValueError("please set at least one of key/password/siteid")
+        raise ValueError("please set at least one of key/password/siteid/host")
     identity = NodeIdentity()
     identity.password = password or identity.password
     identity.access_key = key or identity.access_key
     identity.site_id = siteid or identity.site_id
+    host = host or identity.default_master
+    if not host.startswith("ws://") and not host.startswith("wss://"):
+        host = "ws://" + host
+    identity.default_master = host
     identity.save()
     print(f"identity saved: {identity.IDENTITY_FILE.path}")
 
@@ -34,18 +39,21 @@ def identity_set(key: str, password: str, siteid: str):
 @hmclient_cmds.command(help="simple cli interface to inject utterances and print speech", name="terminal")
 @click.option("--key", help="HiveMind access key", type=str, default="")
 @click.option("--password", help="HiveMind password", type=str, default="")
-@click.option("--host", help="HiveMind host", type=str, default="0.0.0.0")
+@click.option("--host", help="HiveMind host", type=str, default="")
 @click.option("--port", help="HiveMind port number", type=int, default=5678)
 @click.option("--siteid", help="location identifier for message.context", type=str, default="")
 def terminal(key: str, password: str, host: str, port: int, siteid: str):
-    if not password or not key or not siteid:
-        identity = NodeIdentity()
-        password = password or identity.password
-        key = key or identity.access_key
-        siteid = siteid or identity.site_id or "unknown"
+    identity = NodeIdentity()
+    password = password or identity.password
+    key = key or identity.access_key
+    host = host or identity.default_master
+    siteid = siteid or identity.site_id or "unknown"
 
-    if not key or not password:
-        raise RuntimeError("NodeIdentity not set, please pass key and password or "
+    if not host.startswith("ws://") and not host.startswith("wss://"):
+        host = "ws://" + host
+
+    if not key or not password or not host:
+        raise RuntimeError("NodeIdentity not set, please pass key/password/host or "
                            "call 'hivemind-client set-identity'")
 
     node = HiveMessageBusClient(key, host=host, port=port, password=password)
