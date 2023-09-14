@@ -21,6 +21,8 @@ def hmclient_cmds():
 @click.option("--password", help="HiveMind password", type=str, default="")
 @click.option("--siteid", help="location identifier for message.context", type=str, default="")
 def identity_set(key: str, password: str, siteid: str):
+    if not key and not password and not siteid:
+        raise ValueError("please set at least one of key/password/siteid")
     identity = NodeIdentity()
     identity.password = password or identity.password
     identity.access_key = key or identity.access_key
