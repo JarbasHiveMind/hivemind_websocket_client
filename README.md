@@ -57,6 +57,19 @@ Commands:
   send-mycroft  send a single mycroft message
   terminal      simple cli interface to inject utterances and print speech
 
+
+$ hivemind-client set-identity --help
+Usage: hivemind-client set-identity [OPTIONS]
+
+  persist node identity / credentials
+
+Options:
+  --key TEXT       HiveMind access key
+  --password TEXT  HiveMind password
+  --siteid TEXT    location identifier for message.context
+  --help           Show this message and exit.
+
+
 $ hivemind-client terminal --help
 Usage: hivemind-client terminal [OPTIONS]
 

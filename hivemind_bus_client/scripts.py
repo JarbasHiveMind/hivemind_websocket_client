@@ -26,6 +26,7 @@ def identity_set(key: str, password: str, siteid: str):
     identity.access_key = key or identity.access_key
     identity.site_id = siteid or identity.site_id
     identity.save()
+    print(f"identity saved: {identity.IDENTITY_FILE.path}")
 
 
 @hmclient_cmds.command(help="simple cli interface to inject utterances and print speech", name="terminal")
@@ -40,6 +41,11 @@ def terminal(key: str, password: str, host: str, port: int, siteid: str):
         password = password or identity.password
         key = key or identity.access_key
         siteid = siteid or identity.site_id or "unknown"
+
+    if not key or not password:
+        raise RuntimeError("NodeIdentity not set, please pass key and password or "
+                           "call 'hivemind-client set-identity'")
+
     node = HiveMessageBusClient(key, host=host, port=port, password=password)
     node.connect(FakeBus(), site_id=siteid)
 

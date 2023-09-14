@@ -92,6 +92,10 @@ class HiveMessageBusClient(OVOSBusClient):
         self.identity.access_key = key or self.identity.access_key
         self.identity.name = useragent or self.identity.name
 
+        if not self.identity.access_key or not self.identity.password:
+            raise RuntimeError("NodeIdentity not set, please pass key and password or "
+                               "call 'hivemind-client set-identity'")
+
         self.crypto_key = crypto_key
         self.allow_self_signed = self_signed
         self._mycroft_events = {}  # msg_type: [handler]
