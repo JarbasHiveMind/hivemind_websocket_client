@@ -82,7 +82,7 @@ class HivePayloadWaiter(HiveMessageWaiter):
 
 class HiveMessageBusClient(OVOSBusClient):
     def __init__(self, key=None, password=None, crypto_key=None, host='127.0.0.1', port=5678,
-                 useragent="HiveMessageBusClientV0.0.1", self_signed=True, share_bus=False,
+                 useragent="", self_signed=True, share_bus=False,
                  compress=True, binarize=True):
         ssl = host.startswith("wss://")
         host = host.replace("ws://", "").replace("wss://", "").strip()
@@ -90,7 +90,7 @@ class HiveMessageBusClient(OVOSBusClient):
         self.identity = NodeIdentity()
         self.identity.password = password or self.identity.password
         self.identity.access_key = key or self.identity.access_key
-        self.identity.name = useragent or self.identity.name
+        self.identity.name = useragent or self.identity.name or "HiveMessageBusClientV0.0.1"
 
         if not self.identity.access_key or not self.identity.password:
             raise RuntimeError("NodeIdentity not set, please pass key and password or "
