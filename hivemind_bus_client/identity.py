@@ -60,6 +60,14 @@ class NodeIdentity:
     def site_id(self, val):
         self.IDENTITY_FILE["site_id"] = val
 
+    @property
+    def default_master(self):
+        return self.IDENTITY_FILE.get("default_master")
+
+    @default_master.setter
+    def default_master(self, val):
+        self.IDENTITY_FILE["default_master"] = val
+
     def save(self):
         self.IDENTITY_FILE.store()
 
