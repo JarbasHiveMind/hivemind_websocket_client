@@ -5,6 +5,7 @@ from threading import Event
 from typing import Union
 
 from ovos_bus_client import Message as MycroftMessage, MessageBusClient as OVOSBusClient
+from ovos_bus_client.session import Session
 from ovos_utils.log import LOG
 from ovos_utils.messagebus import FakeBus
 from pyee import EventEmitter
@@ -106,7 +107,9 @@ class HiveMessageBusClient(OVOSBusClient):
         self.compress = compress  # None -> auto
         self.binarize = binarize  # only if hivemind reports also supporting it
 
-        super().__init__(host=host, port=port, ssl=ssl, emitter=EventEmitter())
+        sess = Session()  # new session for this client
+        super().__init__(host=host, port=port, ssl=ssl, emitter=EventEmitter(), session=sess)
+        LOG.info("Session ID: {sess.session_id}")
 
     @property
     def useragent(self):

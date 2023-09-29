@@ -1,4 +1,4 @@
-ovos-bus-client
+ovos_bus_client>=0.0.6a8
 ovos_utils>=0.0.6a5
 pycryptodomex
 bitstring
