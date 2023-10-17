@@ -199,7 +199,9 @@ class HiveMindSlaveProtocol:
         assert isinstance(message.payload, MycroftMessage)
         # master wants to inject message into mycroft bus
         pload = message.payload
-        pload.context["source"] = self.node_id
+
+        # from this point on, it should be a native source and execute audio
+        pload.context["source"] = pload.context.pop("destination")
         self.internal_protocol.bus.emit(pload)
 
     def handle_broadcast(self, message: HiveMessage):
