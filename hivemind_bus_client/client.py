@@ -99,7 +99,6 @@ class HiveMessageBusClient(OVOSBusClient):
 
         self.crypto_key = crypto_key
         self.allow_self_signed = self_signed
-        self._mycroft_events = {}  # msg_type: [handler]
         self.share_bus = share_bus
         self.handshake_event = Event()
 
@@ -109,7 +108,8 @@ class HiveMessageBusClient(OVOSBusClient):
 
         sess = Session()  # new session for this client
         super().__init__(host=host, port=port, ssl=ssl, emitter=EventEmitter(), session=sess)
-        LOG.info("Session ID: {sess.session_id}")
+        LOG.info(f"Session ID: {sess.session_id}")
+        self.internal_bus = FakeBus(session=sess)  # also send emitted events to handlers registered within the client
 
     @property
     def useragent(self):
@@ -237,7 +237,7 @@ class HiveMessageBusClient(OVOSBusClient):
     def _handle_hive_protocol(self, message: HiveMessage):
         # LOG.debug(f"received HiveMind message: {message.msg_type}")
         if message.msg_type == HiveMessageType.BUS:
-            self._fire_mycroft_handlers(message)
+            self.internal_bus.emit(message.payload)
         self.emitter.emit(message.msg_type, message)  # hive message
 
     def emit(self, message: Union[MycroftMessage, HiveMessage]):
@@ -265,6 +265,8 @@ class HiveMessageBusClient(OVOSBusClient):
                 if "destination" not in message.payload.context:
                     ctxt["destination"] = "HiveMind"
                 message.payload.context = ctxt
+                # also send event to client registered handlers
+                self.internal_bus.emit(message.payload)
 
             LOG.debug(f"sending to HiveMind: {message.msg_type}")
             binarize = False
@@ -292,28 +294,13 @@ class HiveMessageBusClient(OVOSBusClient):
             LOG.warning(f'Could not send {message.msg_type} message because connection '
                         'has been closed')
 
-    # mycroft events api
-    def _fire_mycroft_handlers(self, message: Union[MycroftMessage, HiveMessage]):
-        handlers = []
-        if isinstance(message, MycroftMessage):
-            handlers = self._mycroft_events.get(message.msg_type) or []
-        elif message.msg_type == HiveMessageType.BUS:
-            handlers = self._mycroft_events.get(message.payload.msg_type) or []
-        for func in handlers:
-            try:
-                func(message.payload)
-            except Exception as e:
-                LOG.exception("Failed to call event handler")
-                continue
-
     def emit_mycroft(self, message: MycroftMessage):
         message = HiveMessage(msg_type=HiveMessageType.BUS, payload=message)
         self.emit(message)
 
     def on_mycroft(self, mycroft_msg_type, func):
         LOG.debug(f"registering mycroft event: {mycroft_msg_type}")
-        self._mycroft_events[mycroft_msg_type] = self._mycroft_events.get(mycroft_msg_type) or []
-        self._mycroft_events[mycroft_msg_type].append(func)
+        self.internal_bus.on(mycroft_msg_type, func)
 
     # event api
     def on(self, event_name, func):
