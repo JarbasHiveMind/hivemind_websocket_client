@@ -107,9 +107,9 @@ class HiveMessageBusClient(OVOSBusClient):
         self.binarize = binarize  # only if hivemind reports also supporting it
 
         sess = Session()  # new session for this client
-        super().__init__(host=host, port=port, ssl=ssl, emitter=EventEmitter(), session=sess)
         LOG.info(f"Session ID: {sess.session_id}")
         self.internal_bus = FakeBus(session=sess)  # also send emitted events to handlers registered within the client
+        super().__init__(host=host, port=port, ssl=ssl, emitter=EventEmitter(), session=sess)
 
     @property
     def useragent(self):
