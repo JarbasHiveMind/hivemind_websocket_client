@@ -37,11 +37,11 @@ def identity_set(key: str, password: str, host: str, siteid: str):
 
 
 @hmclient_cmds.command(help="simple cli interface to inject utterances and print speech", name="terminal")
-@click.option("--key", help="HiveMind access key", type=str, default="")
-@click.option("--password", help="HiveMind password", type=str, default="")
-@click.option("--host", help="HiveMind host", type=str, default="")
-@click.option("--port", help="HiveMind port number", type=int, default=5678)
-@click.option("--siteid", help="location identifier for message.context", type=str, default="")
+@click.option("--key", help="HiveMind access key (default read from identity file)", type=str, default="")
+@click.option("--password", help="HiveMind password (default read from identity file)", type=str, default="")
+@click.option("--host", help="HiveMind host (default read from identity file)", type=str, default="")
+@click.option("--port", help="HiveMind port number (default: 5678)", type=int, default=5678)
+@click.option("--siteid", help="location identifier for message.context  (default read from identity file)", type=str, default="")
 def terminal(key: str, password: str, host: str, port: int, siteid: str):
     identity = NodeIdentity()
     password = password or identity.password
@@ -87,13 +87,16 @@ def terminal(key: str, password: str, host: str, port: int, siteid: str):
 
 @hmclient_cmds.command(help="send a single mycroft message",
                        name="send-mycroft")
-@click.option("--key", help="HiveMind access key", type=str)
-@click.option("--host", help="HiveMind host", type=str, default="0.0.0.0")
-@click.option("--port", help="HiveMind port number", type=int, default=5678)
+@click.option("--key", help="HiveMind access key (default read from identity file)", type=str, default="")
+@click.option("--password", help="HiveMind password (default read from identity file)", type=str, default="")
+@click.option("--host", help="HiveMind host (default read from identity file)", type=str, default="")
+@click.option("--port", help="HiveMind port number (default: 5678)", type=int, default=5678)
+@click.option("--siteid", help="location identifier for message.context  (default read from identity file)", type=str, default="")
 @click.option("--msg", help="ovos message type to inject", type=str)
-@click.option("--payload", help="ovos message json payload", type=str)
-def send_mycroft(key: str, host: str, port: int, msg: str, payload: str):
-    node = HiveMessageBusClient(key, host=host, port=port)
+@click.option("--payload", help="ovos message.data json", type=str)
+def send_mycroft(key: str, password: str, host: str, port: int, siteid: str, msg: str, payload: str):
+    node = HiveMessageBusClient(key, host=host, port=port, password=password)
+    node.connect(FakeBus(), site_id=siteid)
 
     node.run_in_thread()
     node.connected_event.wait()
@@ -106,13 +109,29 @@ def send_mycroft(key: str, host: str, port: int, msg: str, payload: str):
 
 @hmclient_cmds.command(help="escalate a single mycroft message",
                        name="escalate")
-@click.option("--key", help="HiveMind access key", type=str)
-@click.option("--host", help="HiveMind host", type=str, default="0.0.0.0")
-@click.option("--port", help="HiveMind port number", type=int, default=5678)
+@click.option("--key", help="HiveMind access key (default read from identity file)", type=str, default="")
+@click.option("--password", help="HiveMind password (default read from identity file)", type=str, default="")
+@click.option("--host", help="HiveMind host (default read from identity file)", type=str, default="")
+@click.option("--port", help="HiveMind port number (default: 5678)", type=int, default=5678)
+@click.option("--siteid", help="location identifier for message.context  (default read from identity file)", type=str, default="")
 @click.option("--msg", help="ovos message type to inject", type=str)
-@click.option("--payload", help="ovos message json payload", type=str)
-def escalate(key: str, host: str, port: int, msg: str, payload: str):
-    node = HiveMessageBusClient(key, host=host, port=port)
+@click.option("--payload", help="ovos message.data json", type=str)
+def escalate(key: str, password: str, host: str, port: int, siteid: str, msg: str, payload: str):
+    identity = NodeIdentity()
+    password = password or identity.password
+    key = key or identity.access_key
+    host = host or identity.default_master
+    siteid = siteid or identity.site_id or "unknown"
+
+    if not host.startswith("ws://") and not host.startswith("wss://"):
+        host = "ws://" + host
+
+    if not key or not password or not host:
+        raise RuntimeError("NodeIdentity not set, please pass key/password/host or "
+                           "call 'hivemind-client set-identity'")
+
+    node = HiveMessageBusClient(key, host=host, port=port, password=password)
+    node.connect(FakeBus(), site_id=siteid)
 
     node.run_in_thread()
     node.connected_event.wait()
@@ -127,13 +146,29 @@ def escalate(key: str, host: str, port: int, msg: str, payload: str):
 
 @hmclient_cmds.command(help="propagate a single mycroft message",
                        name="propagate")
-@click.option("--key", help="HiveMind access key", type=str)
-@click.option("--host", help="HiveMind host", type=str, default="0.0.0.0")
-@click.option("--port", help="HiveMind port number", type=int, default=5678)
+@click.option("--key", help="HiveMind access key (default read from identity file)", type=str, default="")
+@click.option("--password", help="HiveMind password (default read from identity file)", type=str, default="")
+@click.option("--host", help="HiveMind host (default read from identity file)", type=str, default="")
+@click.option("--port", help="HiveMind port number (default: 5678)", type=int, default=5678)
+@click.option("--siteid", help="location identifier for message.context  (default read from identity file)", type=str, default="")
 @click.option("--msg", help="ovos message type to inject", type=str)
-@click.option("--payload", help="ovos message json payload", type=str)
-def propagate(key: str, host: str, port: int, msg: str, payload: str):
-    node = HiveMessageBusClient(key, host=host, port=port)
+@click.option("--payload", help="ovos message.data json", type=str)
+def propagate(key: str, password: str, host: str, port: int, siteid: str, msg: str, payload: str):
+    identity = NodeIdentity()
+    password = password or identity.password
+    key = key or identity.access_key
+    host = host or identity.default_master
+    siteid = siteid or identity.site_id or "unknown"
+
+    if not host.startswith("ws://") and not host.startswith("wss://"):
+        host = "ws://" + host
+
+    if not key or not password or not host:
+        raise RuntimeError("NodeIdentity not set, please pass key/password/host or "
+                           "call 'hivemind-client set-identity'")
+
+    node = HiveMessageBusClient(key, host=host, port=port, password=password)
+    node.connect(FakeBus(), site_id=siteid)
 
     node.run_in_thread()
     node.connected_event.wait()
