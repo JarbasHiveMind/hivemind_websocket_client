@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased](https://github.com/JarbasHiveMind/hivemind_websocket_client/tree/HEAD)
+
+[Full Changelog](https://github.com/JarbasHiveMind/hivemind_websocket_client/compare/V0.0.4a12...HEAD)
+
+**Fixed bugs:**
+
+- refactor/mycroft\_events [\#21](https://github.com/JarbasHiveMind/hivemind_websocket_client/pull/21) ([JarbasAl](https://github.com/JarbasAl))
+
+## [V0.0.4a12](https://github.com/JarbasHiveMind/hivemind_websocket_client/tree/V0.0.4a12) (2023-10-17)
+
+[Full Changelog](https://github.com/JarbasHiveMind/hivemind_websocket_client/compare/V0.0.4a11...V0.0.4a12)
+
 ## [V0.0.4a11](https://github.com/JarbasHiveMind/hivemind_websocket_client/tree/V0.0.4a11) (2023-09-29)
 
 [Full Changelog](https://github.com/JarbasHiveMind/hivemind_websocket_client/compare/V0.0.4a10...V0.0.4a11)
