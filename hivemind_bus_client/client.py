@@ -84,18 +84,15 @@ class HivePayloadWaiter(HiveMessageWaiter):
 class HiveMessageBusClient(OVOSBusClient):
     def __init__(self, key=None, password=None, crypto_key=None, host='127.0.0.1', port=5678,
                  useragent="", self_signed=True, share_bus=False,
-                 compress=True, binarize=True):
+                 compress=True, binarize=True, identity: NodeIdentity = None):
         ssl = host.startswith("wss://")
         host = host.replace("ws://", "").replace("wss://", "").strip()
 
-        self.identity = NodeIdentity()
-        self.identity.password = password or self.identity.password
-        self.identity.access_key = key or self.identity.access_key
-        self.identity.name = useragent or self.identity.name or "HiveMessageBusClientV0.0.1"
-
-        if not self.identity.access_key or not self.identity.password:
-            raise RuntimeError("NodeIdentity not set, please pass key and password or "
-                               "call 'hivemind-client set-identity'")
+        self.identity = identity or None
+        self._password = password
+        self._access_key = key
+        self._name = useragent
+        self.init_identity()
 
         self.crypto_key = crypto_key
         self.allow_self_signed = self_signed
@@ -110,6 +107,17 @@ class HiveMessageBusClient(OVOSBusClient):
         LOG.info(f"Session ID: {sess.session_id}")
         self.internal_bus = FakeBus(session=sess)  # also send emitted events to handlers registered within the client
         super().__init__(host=host, port=port, ssl=ssl, emitter=EventEmitter(), session=sess)
+
+    def init_identity(self, site_id=None):
+        self.identity = self.identity or NodeIdentity()
+        self.identity.password = self._password or self.identity.password
+        self.identity.access_key = self._access_key or self.identity.access_key
+        self.identity.name = self._name or "HiveMessageBusClientV0.0.1"
+        self.identity.site_id = site_id or self.identity.site_id
+
+        if not self.identity.access_key or not self.identity.password:
+            raise RuntimeError("NodeIdentity not set, please pass key and password or "
+                               "call 'hivemind-client set-identity'")
 
     @property
     def useragent(self):
@@ -143,22 +151,22 @@ class HiveMessageBusClient(OVOSBusClient):
     def key(self, val):
         self.identity.access_key = val
 
-    def connect(self, bus=FakeBus(), identity=None, protocol=None, site_id=None):
+    def connect(self, bus=FakeBus(), protocol=None, site_id=None):
         from hivemind_bus_client.protocol import HiveMindSlaveProtocol
 
-        self.identity = identity or self.identity
         self.identity.site_id = site_id or self.identity.site_id
+
         if protocol is None:
             LOG.debug("Initializing HiveMindSlaveProtocol")
             self.protocol = HiveMindSlaveProtocol(self,
                                                   shared_bus=self.share_bus,
-                                                  site_id=site_id or "unknown",
+                                                  site_id=self.identity.site_id or "unknown",
                                                   identity=self.identity)
         else:
             self.protocol = protocol
             self.protocol.identity = self.identity
-            if site_id is not None:
-                self.protocol.site_id = site_id
+            if self.identity.site_id is not None:
+                self.protocol.site_id = self.identity.site_id
 
         LOG.info("Connecting to Hivemind")
         self.run_in_thread()
