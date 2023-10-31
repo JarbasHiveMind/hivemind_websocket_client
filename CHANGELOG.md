@@ -1,5 +1,9 @@
 # Changelog
 
+## [V0.0.4a14](https://github.com/JarbasHiveMind/hivemind_websocket_client/tree/V0.0.4a14) (2023-10-26)
+
+[Full Changelog](https://github.com/JarbasHiveMind/hivemind_websocket_client/compare/V0.0.4a13...V0.0.4a14)
+
 ## [V0.0.4a13](https://github.com/JarbasHiveMind/hivemind_websocket_client/tree/V0.0.4a13) (2023-10-26)
 
 [Full Changelog](https://github.com/JarbasHiveMind/hivemind_websocket_client/compare/V0.0.4a12...V0.0.4a13)
