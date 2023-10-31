@@ -1,4 +1,7 @@
-ovos_bus_client>=0.0.6a8
-ovos_utils>=0.0.6a5
-pycryptodomex
-bitstring
+poorman-handshake>=0.2.2a3
+ovos_bus_client>=0.0.6a19
+ovos_utils~=0.0.36
+bitstring>=4.1.1
+PGPy>=0.6.0
+cryptography>=41.0.1
+pycryptodomex>=3.18.0
