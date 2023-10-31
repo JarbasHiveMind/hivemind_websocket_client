@@ -98,7 +98,6 @@ def send_mycroft(key: str, password: str, host: str, port: int, siteid: str, msg
     node = HiveMessageBusClient(key, host=host, port=port, password=password)
     node.connect(FakeBus(), site_id=siteid)
 
-    node.run_in_thread()
     node.connected_event.wait()
     print("== connected to HiveMind")
 
@@ -133,7 +132,6 @@ def escalate(key: str, password: str, host: str, port: int, siteid: str, msg: st
     node = HiveMessageBusClient(key, host=host, port=port, password=password)
     node.connect(FakeBus(), site_id=siteid)
 
-    node.run_in_thread()
     node.connected_event.wait()
     print("== connected to HiveMind")
 
@@ -170,7 +168,6 @@ def propagate(key: str, password: str, host: str, port: int, siteid: str, msg: s
     node = HiveMessageBusClient(key, host=host, port=port, password=password)
     node.connect(FakeBus(), site_id=siteid)
 
-    node.run_in_thread()
     node.connected_event.wait()
     print("== connected to HiveMind")
 
