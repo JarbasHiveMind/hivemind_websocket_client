@@ -132,6 +132,9 @@ class HiveMindSlaveProtocol:
             node_id = message.payload.get("node_id", "")
             self.internal_protocol.node_id = node_id
             LOG.info(f"Connected to HiveMind: {node_id}")
+        if "session_id" in message.payload:
+            self.internal_protocol.bus.session_id = message.payload["session_id"]
+            LOG.debug("session_id updated to: " + message.payload["session_id"])
 
     def start_handshake(self,):
         if self.binarize:
